@@ -1,0 +1,20 @@
+sm:
+  init_state: 'idle'
+  states:
+    - name: 'idle'
+      enter: ['clear_all_variables']
+      exit: ['record_order_number']
+      do:
+        actions: []
+        next: ''
+      events:
+        - trigger: 'vehicle_arrived'
+          next: 'p_weight_compare'
+    - name: 'p_weight_compare'
+      enter: ['broadcast_driver_in']
+      exit: ['clear_broadcast']
+      do:
+        actions: []
+      events:
+        - trigger: 'reset'
+          next: 'idle'

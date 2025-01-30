@@ -1,0 +1,19 @@
+sm:
+  actions: ['say_hello','say_goodbye']
+  events: ['y_pushed','n_pushed']
+  init_state: 'idle'
+  states:
+    - name: 'idle'
+      enter: ['say_hello']
+      exit: ['say_goodbye']
+      do:
+        actions: ['say_hello']
+        next: 'active'
+    - name: 'active'
+      enter: ['say_hello']
+      exit: ['say_hello','say_goodbye']
+      do:
+        actions: ['say_goodbye', 'prompt']
+      events:
+        - trigger: 'y_pushed'
+          next: 'idle'
