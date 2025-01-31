@@ -2,8 +2,8 @@ sm:
   init_state: 'idle'
   states:
     - name: 'idle'
-      enter: ['clear_all_variables']
-      exit: ['record_order_number']
+      enter: ['clear_all_variables', 'start_2s_timer']
+      exit: ['record_order_number', 'stop_2s_timer']
       do:
         actions: []
         next: ''
@@ -11,8 +11,8 @@ sm:
         - trigger: 'vehicle_arrived'
           next: 'p_weight_compare'
     - name: 'p_weight_compare'
-      enter: ['broadcast_driver_in']
-      exit: ['clear_broadcast']
+      enter: ['broadcast_driver_in', 'start_5s_timer']
+      exit: ['clear_broadcast', 'stop_5s_timer']
       do:
         actions: []
       events:

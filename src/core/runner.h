@@ -1,6 +1,7 @@
 #if !defined(_RUNNER_H_)
 #define _RUNNER_H_
 #include "../sm/lib/sm.h"
+#include "../public/event_sc/ad_event_sc.h"
 
 typedef std::function<void()> CLEAR_FUNC;
 class RV_FATHER
@@ -47,6 +48,15 @@ public:
 class RUNNER : public DYNAMIC_SM, public RV_FATHER
 {
     using DYNAMIC_SM::DYNAMIC_SM;
+    std::shared_ptr<AD_EVENT_SC> m_event_sc = std::make_shared<AD_EVENT_SC>();
+    std::function<void(AD_EVENT_SC_TIMER_NODE_PTR &)> m_clear_timer_func = [this](AD_EVENT_SC_TIMER_NODE_PTR &timer)
+    {
+        if (timer)
+        {
+            m_event_sc->stopTimer(timer);
+            timer.reset();
+        }
+    };
 
 public:
     AD_LOGGER m_logger = AD_LOGGER("", "runner");
@@ -54,15 +64,54 @@ public:
     RUNNER_VARIBLES<std::string> cur_order_number = RUNNER_VARIBLES<std::string>("", *this);
     RUNNER_VARIBLES<double> init_p_weight = RUNNER_VARIBLES<double>(0.0, *this, [](double &var)
                                                                     { var = 0.0; });
+    RUNNER_VARIBLES<AD_EVENT_SC_TIMER_NODE_PTR> m_2s_timer =
+        RUNNER_VARIBLES<AD_EVENT_SC_TIMER_NODE_PTR>(
+            nullptr,
+            *this,
+            m_clear_timer_func);
+    RUNNER_VARIBLES<AD_EVENT_SC_TIMER_NODE_PTR> m_5s_timer =
+        RUNNER_VARIBLES<AD_EVENT_SC_TIMER_NODE_PTR>(
+            nullptr,
+            *this,
+            m_clear_timer_func);
     void clear_all_variables()
     {
         m_logger.log("clear all variables");
         clear_all();
     }
+    void start_2s_timer()
+    {
+        m_logger.log("start 2s timer");
+        m_2s_timer = m_event_sc->startTimer(2, [this]()
+                                            { proc_event("vehicle_arrived"); });
+    }
     void record_order_number(const std::string &_order_number)
     {
         m_logger.log("record order number: %s", _order_number.c_str());
         cur_order_number = _order_number;
+    }
+    void stop_2s_timer()
+    {
+        m_logger.log("stop 2s timer");
+        m_2s_timer.clear();
+    }
+    void start_5s_timer()
+    {
+        m_logger.log("start 5s timer");
+        m_5s_timer = m_event_sc->startTimer(5, [this]()
+                                            { proc_event("reset"); });
+    }
+    void stop_5s_timer()
+    {
+        m_logger.log("stop 5s timer");
+        m_5s_timer.clear();
+    }
+    void start_exit_timer() {
+        m_logger.log("start exit timer");
+        m_event_sc->startTimer(20, [this]()
+        {
+            m_event_sc->stopEventLoop();
+        });
     }
     void broadcast_driver_in()
     {
@@ -71,6 +120,11 @@ public:
     void clear_broadcast()
     {
         m_logger.log("clear broadcast");
+    }
+
+    void run_event_loop()
+    {
+        m_event_sc->runEventLoop();
     }
 
     static std::shared_ptr<RUNNER> runner_init(const YAML::Node &_sm_config);

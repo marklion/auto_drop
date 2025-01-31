@@ -31,8 +31,37 @@ std::shared_ptr<RUNNER> RUNNER::runner_init(const YAML::Node &_sm_config)
             auto &runner_sm = dynamic_cast<RUNNER &>(_sm);
             runner_sm.clear_broadcast();
         });
+    sm_state_fac->register_actions(
+        "start_2s_timer",
+        [](DYNAMIC_SM &_sm)
+        {
+            auto &runner_sm = dynamic_cast<RUNNER &>(_sm);
+            runner_sm.start_2s_timer();
+        });
+    sm_state_fac->register_actions(
+        "stop_2s_timer",
+        [](DYNAMIC_SM &_sm)
+        {
+            auto &runner_sm = dynamic_cast<RUNNER &>(_sm);
+            runner_sm.stop_2s_timer();
+        });
+    sm_state_fac->register_actions(
+        "start_5s_timer",
+        [](DYNAMIC_SM &_sm)
+        {
+            auto &runner_sm = dynamic_cast<RUNNER &>(_sm);
+            runner_sm.start_5s_timer();
+        });
+    sm_state_fac->register_actions(
+        "stop_5s_timer",
+        [](DYNAMIC_SM &_sm)
+        {
+            auto &runner_sm = dynamic_cast<RUNNER &>(_sm);
+            runner_sm.stop_5s_timer();
+        });
     auto ret = std::make_shared<RUNNER>(sm_state_fac->m_init_state, sm_state_fac);
     ret->begin();
+    ret->start_exit_timer();
 
     return ret;
 }
