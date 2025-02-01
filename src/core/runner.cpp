@@ -61,7 +61,6 @@ std::shared_ptr<RUNNER> RUNNER::runner_init(const YAML::Node &_sm_config)
         });
     auto ret = std::make_shared<RUNNER>(sm_state_fac->m_init_state, sm_state_fac);
     ret->begin();
-    ret->start_exit_timer();
 
     return ret;
 }

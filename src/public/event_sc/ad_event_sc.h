@@ -20,6 +20,7 @@ typedef std::shared_ptr<AD_EVENT_SC_NODE> AD_EVENT_SC_NODE_PTR;
 class AD_EVENT_SC_TIMER_NODE : public AD_EVENT_SC_NODE {
     int m_timer_fd = -1;
     std::function<void()> m_callback;
+    int m_timeout;
     AD_LOGGER m_logger;
 public:
     AD_EVENT_SC_TIMER_NODE(int _timeout, std::function<void()> _callback);
@@ -31,7 +32,7 @@ public:
     void handleEvent() override;
 };
 typedef std::shared_ptr<AD_EVENT_SC_TIMER_NODE> AD_EVENT_SC_TIMER_NODE_PTR;
-class AD_EVENT_SC {
+class AD_EVENT_SC:public AD_EVENT_SC_NODE{
 public:
     AD_EVENT_SC();
 
@@ -49,11 +50,55 @@ public:
     void runEventLoop();
 
     void stopEventLoop();
+    virtual int getFd() const override;
+    virtual void handleEvent() override;
 
 private:
     int m_epollFd = -1; // epoll 文件描述符
     std::unordered_map<int, AD_EVENT_SC_NODE_PTR> m_fdToNode; // 文件描述符到节点的映射
     AD_LOGGER m_logger;
+};
+typedef std::shared_ptr<AD_EVENT_SC> AD_EVENT_SC_PTR;
+
+class AD_EVENT_SC_TCP_LISTEN_NODE;
+typedef std::shared_ptr<AD_EVENT_SC_TCP_LISTEN_NODE> AD_EVENT_SC_TCP_LISTEN_NODE_PTR;
+class AD_EVENT_SC_TCP_DATA_NODE;
+typedef std::shared_ptr<AD_EVENT_SC_TCP_DATA_NODE> AD_EVENT_SC_TCP_DATA_NODE_PTR;
+class AD_EVENT_SC_TCP_DATA_NODE : public AD_EVENT_SC_NODE {
+    int m_fd = -1;
+    AD_EVENT_SC_TCP_LISTEN_NODE_PTR m_listen_node;
+    AD_LOGGER m_logger;
+public:
+    AD_EVENT_SC_TCP_DATA_NODE(int _fd, AD_EVENT_SC_TCP_LISTEN_NODE_PTR _listen_node);
+
+    virtual ~AD_EVENT_SC_TCP_DATA_NODE();
+
+    int getFd() const override {
+        return m_fd;
+    }
+    void handleEvent() override;
+    virtual void handleRead(const unsigned char *_data, unsigned long _size) = 0;
+    virtual void handleError() {};
+};
+
+typedef std::function<AD_EVENT_SC_TCP_DATA_NODE_PTR(int, AD_EVENT_SC_TCP_LISTEN_NODE_PTR)> CREATE_DATA_FUNC;
+class AD_EVENT_SC_TCP_LISTEN_NODE : public AD_EVENT_SC_NODE, public std::enable_shared_from_this<AD_EVENT_SC_TCP_LISTEN_NODE>{
+    int m_listen_fd = -1;
+    AD_LOGGER m_logger;
+    std::map<int, AD_EVENT_SC_TCP_DATA_NODE_PTR> m_fd_to_data_node;
+    CREATE_DATA_FUNC m_create_data_func;
+    AD_EVENT_SC_PTR m_event_sc;
+public:
+    AD_EVENT_SC_TCP_LISTEN_NODE(unsigned short _port, CREATE_DATA_FUNC _create_data_func, AD_EVENT_SC_PTR _event_sc);
+
+    virtual ~AD_EVENT_SC_TCP_LISTEN_NODE();
+
+    int getFd() const override {
+        return m_listen_fd;
+    }
+
+    void handleEvent() override;
+    void close_data_node(int _fd);
 };
 
 

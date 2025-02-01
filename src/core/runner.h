@@ -48,7 +48,6 @@ public:
 class RUNNER : public DYNAMIC_SM, public RV_FATHER
 {
     using DYNAMIC_SM::DYNAMIC_SM;
-    std::shared_ptr<AD_EVENT_SC> m_event_sc = std::make_shared<AD_EVENT_SC>();
     std::function<void(AD_EVENT_SC_TIMER_NODE_PTR &)> m_clear_timer_func = [this](AD_EVENT_SC_TIMER_NODE_PTR &timer)
     {
         if (timer)
@@ -59,6 +58,7 @@ class RUNNER : public DYNAMIC_SM, public RV_FATHER
     };
 
 public:
+    std::shared_ptr<AD_EVENT_SC> m_event_sc = std::make_shared<AD_EVENT_SC>();
     AD_LOGGER m_logger = AD_LOGGER("", "runner");
     std::vector<std::string> m_event_list = {"reset", "vehicle_arrived"};
     RUNNER_VARIBLES<std::string> cur_order_number = RUNNER_VARIBLES<std::string>("", *this);
@@ -83,7 +83,7 @@ public:
     {
         m_logger.log("start 2s timer");
         m_2s_timer = m_event_sc->startTimer(2, [this]()
-                                            { proc_event("vehicle_arrived"); });
+                                            { proc_event("nothing"); });
     }
     void record_order_number(const std::string &_order_number)
     {
@@ -105,13 +105,6 @@ public:
     {
         m_logger.log("stop 5s timer");
         m_5s_timer.clear();
-    }
-    void start_exit_timer() {
-        m_logger.log("start exit timer");
-        m_event_sc->startTimer(20, [this]()
-        {
-            m_event_sc->stopEventLoop();
-        });
     }
     void broadcast_driver_in()
     {

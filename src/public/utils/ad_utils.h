@@ -86,7 +86,7 @@ public:
         vsnprintf(buffer, sizeof(buffer), format.c_str(), args);
         va_end(args);
 
-        std::string log_message = "[" + ad_utils_date_time().m_datetime_ms + "] [" + level_to_string(level) + "] [" + m_module_name+ "]" + buffer;
+        std::string log_message = "[" + ad_utils_date_time().m_datetime_ms + "] [" + level_to_string(level) + "] [" + m_module_name+ "] " + buffer;
 
         if (log_file)
         {

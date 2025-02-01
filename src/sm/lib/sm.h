@@ -60,7 +60,8 @@ public:
                                                  m_do_funcs(do_funcs),
                                                  m_state_name(state_name),
                                                  m_next_state(next_state),
-                                                 m_sm_state_factory(sm_state_factory)
+                                                 m_sm_state_factory(sm_state_factory),
+                                                 m_logger("", "SM_STATE " + state_name)
     {
     }
     void add_event(const std::string &event, const std::string &next_state)
@@ -112,14 +113,17 @@ public:
 
 class DYNAMIC_SM
 {
+    AD_LOGGER m_logger = AD_LOGGER("", "sm");
 public:
     SM_STATE_PTR m_current_state;
+
     DYNAMIC_SM(const std::string &_init_state, SM_STATE_FACTORY_PTR _sm_state_factory)
     {
         m_current_state.reset(_sm_state_factory->create_sm_state(_init_state).release());
     }
     void change_state(SM_STATE_PTR &_next_state)
     {
+        m_logger.log(AD_LOGGER::DEBUG, "change state from %s to %s", m_current_state->m_state_name.c_str(), _next_state->m_state_name.c_str());
         m_current_state->after_exit(*this);
         m_current_state = std::move(_next_state);
         m_current_state->before_enter(*this);
@@ -139,6 +143,7 @@ public:
     }
     void proc_event(const std::string &_event)
     {
+        m_logger.log(AD_LOGGER::DEBUG, "proc event %s", _event.c_str());
         auto next = m_current_state->get_event_state(_event);
         if (next)
         {

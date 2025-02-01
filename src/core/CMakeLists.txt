@@ -11,5 +11,6 @@ add_executable(core_daemon ${MAIN_SRC})
 
 find_library(SM_LIB libsm.so ${PRJ_INTERNAL_BUILD}/lib)
 find_library(AD_UTILS_LIB libad_utils.so ${PRJ_INTERNAL_BUILD}/lib)
+find_library(AD_RPC_LIB libad_rpc.so ${PRJ_INTERNAL_BUILD}/lib)
 
-target_link_libraries(core_daemon yaml-cpp ${SM_LIB} ${AD_UTILS_LIB})
+target_link_libraries(core_daemon yaml-cpp ${SM_LIB} ${AD_UTILS_LIB} ${AD_RPC_LIB} thrift)
