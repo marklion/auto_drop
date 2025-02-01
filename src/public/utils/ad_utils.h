@@ -1,6 +1,10 @@
 #if !defined(_AD_UTILS_H_)
 #define _AD_UTILS_H_
-#include <iostream>
+#include <cstdarg>    // 用于 va_list, va_start, va_end
+#include <cstdio>     // 用于 vsnprintf
+#include <sstream>    // 用于 std::ostringstream
+#include <iomanip>    // 用于 std::setw, std::setfill
+#include <iostream>   // 用于 std::cout
 #include <fstream>
 #include <string>
 #include <ctime>
@@ -108,6 +112,31 @@ public:
         va_end(args);
 
         log(INFO, buffer);
+    }
+    void log_packet(LogLevel level, const uint8_t *packet, size_t len)
+    {
+        if (level < global_log_level)
+        {
+            return;
+        }
+
+        std::ostringstream oss;
+        oss << "[" << ad_utils_date_time().m_datetime_ms << "] [" << level_to_string(level) << "] [" << m_module_name << "] Packet: ";
+        for (size_t i = 0; i < len; ++i)
+        {
+            oss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(packet[i]) << " ";
+        }
+
+        std::string log_message = oss.str();
+
+        if (log_file)
+        {
+            *log_file << log_message << std::endl;
+        }
+        else
+        {
+            std::cout << log_message << std::endl;
+        }
     }
 
 private:

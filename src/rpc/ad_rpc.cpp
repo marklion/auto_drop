@@ -6,18 +6,23 @@
 class my_rpc_trans : public AD_EVENT_SC_TCP_DATA_NODE
 {
     std::shared_ptr<apache::thrift::TMultiplexedProcessor> m_processor = std::make_shared<apache::thrift::TMultiplexedProcessor>();
+    AD_LOGGER m_logger = AD_LOGGER("", "rpc");
 public:
     using AD_EVENT_SC_TCP_DATA_NODE::AD_EVENT_SC_TCP_DATA_NODE;
     void handleRead(const unsigned char *buf, size_t len) override
     {
+        m_logger.log_packet(AD_LOGGER::DEBUG, buf, len);
         auto it = std::make_shared<apache::thrift::transport::TMemoryBuffer>((uint8_t *)buf, len);
-        auto ip = std::make_shared<apache::thrift::protocol::TBinaryProtocol>(it);
+        auto it_ad_trans = std::make_shared<AD_RPC_TRANSPORT>(it);
+        auto ip = std::make_shared<apache::thrift::protocol::TBinaryProtocol>(it_ad_trans);
         auto ot = std::make_shared<apache::thrift::transport::TMemoryBuffer>();
-        auto op = std::make_shared<apache::thrift::protocol::TBinaryProtocol>(ot);
+        auto ot_ad_trans = std::make_shared<AD_RPC_TRANSPORT>(ot);
+        auto op = std::make_shared<apache::thrift::protocol::TBinaryProtocol>(ot_ad_trans);
         m_processor->process(ip, op, nullptr);
         auto reply = ot->getBufferAsString();
         signal(SIGPIPE, SIG_IGN);
         send(getFd(), reply.c_str(), reply.size(), SOCK_NONBLOCK);
+        signal(SIGPIPE, SIG_DFL);
     }
     void add_processor(const std::string &service_name, std::shared_ptr<apache::thrift::TProcessor> processor)
     {

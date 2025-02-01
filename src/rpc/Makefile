@@ -9,6 +9,8 @@ all:$(OUT_CODE_PATH)
 	cp -a $(SRC_DIR)/node_gen_code $(DELIVER_PATH)/lib/
 
 $(OUT_CODE_PATH):$(OUT_CODE_PATH)/cpp $(OUT_CODE_PATH)/js $(OUT_CODE_PATH)/node
+	[ -d $@/build ] || mkdir $@/build
+	pushd $@/build;[ -f Makefile ] || cmake -D PRJ_INTERNAL_BUILD=$(OUTBOUND_DELIVER_PATH) $(SRC_DIR); $(MAKE)
 
 $(DELIVER_PATH):
 	[ -d $(DELIVER_PATH) ] || mkdir $(DELIVER_PATH)
@@ -18,8 +20,6 @@ $(DELIVER_PATH):
 $(OUT_CODE_PATH)/cpp:$(SRC_DIR)/idl.thrift $(DELIVER_PATH)
 	[ -d $@ ] || mkdir -p $@
 	thrift -out $@ --gen cpp:no_skeleton $(SRC_DIR)/idl.thrift
-	[ -d $@/build ] || mkdir $@/build
-	pushd $@/build;[ -f Makefile ] || cmake -D PRJ_INTERNAL_BUILD=$(OUTBOUND_DELIVER_PATH) $(SRC_DIR); $(MAKE)
 
 $(OUT_CODE_PATH)/js:$(SRC_DIR)/idl.thrift
 	[ -d $@ ] || mkdir -p $@
@@ -34,4 +34,4 @@ clean:
 	rm -rf $(DELIVER_PATH)
 	rm -rf $(SRC_DIR)/node_gen_code
 
-.PHONY: all clean
+.PHONY: all clean $(OUT_CODE_PATH)

@@ -20,7 +20,8 @@ int main(int argc, char const *argv[])
     event_sc->startTimer(4, [&](){
         auto client_socket_trans = std::make_shared<apache::thrift::transport::TSocket>("localhost", 12345);
         auto client_buffer_trans = std::make_shared<apache::thrift::transport::TBufferedTransport>(client_socket_trans);
-        auto client_protocol = std::make_shared<apache::thrift::protocol::TBinaryProtocol>(client_buffer_trans);
+        auto client_ad_trans = std::make_shared<AD_RPC_TRANSPORT>(client_buffer_trans);
+        auto client_protocol = std::make_shared<apache::thrift::protocol::TBinaryProtocol>(client_ad_trans);
         auto mt_protocol = std::make_shared<apache::thrift::protocol::TMultiplexedProtocol>(client_protocol, "runner_sm");
         runner_smClient client(mt_protocol);
         client_buffer_trans->open();
