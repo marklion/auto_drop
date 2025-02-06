@@ -19,7 +19,7 @@ get_docker_image() {
 
 start_all_server() {
     line=`wc -l $0|awk '{print $1}'`
-    line=`expr $line - 72`
+    line=`expr $line - 70`
     mkdir /tmp/sys_mt
     tail -n $line $0 | tar zx  -C /tmp/sys_mt/
     rsync -aK /tmp/sys_mt/ /
@@ -36,8 +36,6 @@ start_all_server() {
 }
 
 start_docker_con() {
-    local DATA_BASE_PATH=`realpath $DATA_BASE`
-    local DATA_BASE_PATH=`dirname ${DATA_BASE_PATH}`
     local MOUNT_PROC_ARG=''
     if [ -d /proc ]
     then

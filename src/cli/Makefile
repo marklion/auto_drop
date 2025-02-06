@@ -1,19 +1,14 @@
 SHELL=/bin/bash
 SRC_DIR:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 DELIVER_PATH=$(SRC_DIR)/build
-DELIVER_CONF_PATH=$(DELIVER_PATH)/conf
 
 all:$(DELIVER_PATH)
 
-$(DELIVER_PATH):$(DELIVER_CONF_PATH)
+$(DELIVER_PATH):
 	[ -d $(DELIVER_PATH) ] || mkdir -p $(DELIVER_PATH)
 	[ -d $(SRC_DIR)/cmake_tmp_dir ] || mkdir -p $(SRC_DIR)/cmake_tmp_dir
 	pushd $(SRC_DIR)/cmake_tmp_dir;[ -f Makefile ] || cmake -D PRJ_INTERNAL_BUILD=$(OUTBOUND_DELIVER_PATH) ../; $(MAKE)
-
-$(DELIVER_CONF_PATH):
-	[ -d $(DELIVER_CONF_PATH) ] || mkdir -p $(DELIVER_CONF_PATH)
-	cp $(SRC_DIR)/conf/* $(DELIVER_CONF_PATH)
 clean:
 	rm -rf $(DELIVER_PATH) $(SRC_DIR)/cmake_tmp_dir
 
-.PHONY:all $(DELIVER_PATH) $(DELIVER_CONF_PATH) clean
+.PHONY:all $(DELIVER_PATH) clean

@@ -1,7 +1,10 @@
 #if !defined(_RUNNER_H_)
 #define _RUNNER_H_
-#include "../sm/lib/sm.h"
-#include "../public/event_sc/ad_event_sc.h"
+#include "../../sm/lib/sm.h"
+#include "../../public/event_sc/ad_event_sc.h"
+#include "../../rpc/ad_rpc.h"
+#include "../../rpc/gen_code/cpp/driver_service.h"
+#include "../../public/const_var_define.h"
 
 typedef std::function<void()> CLEAR_FUNC;
 class RV_FATHER
@@ -56,14 +59,38 @@ class RUNNER : public DYNAMIC_SM, public RV_FATHER
             timer.reset();
         }
     };
-
+    std::map<std::string, uint16_t> m_device_map;
 public:
+    void set_device(const std::string &_device_name, const uint16_t _device_id)
+    {
+        m_device_map[_device_name] = _device_id;
+    }
+    uint16_t get_device(const std::string &_device_name)
+    {
+        uint16_t ret = 0;
+        if (m_device_map.find(_device_name) != m_device_map.end())
+        {
+            ret = m_device_map[_device_name];
+            if (ret == 0)
+            {
+                m_device_map.erase(_device_name);
+            }
+        }
+
+        return ret;
+    }
     std::shared_ptr<AD_EVENT_SC> m_event_sc = std::make_shared<AD_EVENT_SC>();
     AD_LOGGER m_logger = AD_LOGGER("", "runner");
-    std::vector<std::string> m_event_list = {"reset", "vehicle_arrived"};
-    RUNNER_VARIBLES<std::string> cur_order_number = RUNNER_VARIBLES<std::string>("", *this);
-    RUNNER_VARIBLES<double> init_p_weight = RUNNER_VARIBLES<double>(0.0, *this, [](double &var)
-                                                                    { var = 0.0; });
+    RUNNER_VARIBLES<std::string> cur_order_number =
+        RUNNER_VARIBLES<std::string>("", *this);
+    RUNNER_VARIBLES<double> init_p_weight =
+        RUNNER_VARIBLES<double>(
+            0.0,
+            *this,
+            [](double &var)
+            {
+                var = 0.0;
+            });
     RUNNER_VARIBLES<AD_EVENT_SC_TIMER_NODE_PTR> m_2s_timer =
         RUNNER_VARIBLES<AD_EVENT_SC_TIMER_NODE_PTR>(
             nullptr,
@@ -85,10 +112,17 @@ public:
         m_2s_timer = m_event_sc->startTimer(2, [this]()
                                             { proc_event("nothing"); });
     }
-    void record_order_number(const std::string &_order_number)
+    void record_order_number()
     {
-        m_logger.log("record order number: %s", _order_number.c_str());
-        cur_order_number = _order_number;
+        std::string latest_plate;
+        AD_RPC_SC::get_instance()->call_remote<driver_serviceClient>(
+            get_device(AD_CONST_DEVICE_PLATE_CAMERA),
+            "driver_service",
+            [&](driver_serviceClient &client){
+                client.get_trigger_vehicle_plate(latest_plate);
+            });
+        m_logger.log("record order number: %s", latest_plate.c_str());
+        cur_order_number = latest_plate;
     }
     void stop_2s_timer()
     {
@@ -109,19 +143,24 @@ public:
     void broadcast_driver_in()
     {
         m_logger.log("broadcast driver in");
+        AD_RPC_SC::get_instance()->call_remote<driver_serviceClient>(
+            get_device(AD_CONST_DEVICE_LED),
+            "driver_service",
+            [&](driver_serviceClient &client)
+            {
+                client.voice_broadcast("please enter");
+            });
     }
     void clear_broadcast()
     {
         m_logger.log("clear broadcast");
     }
 
-    void run_event_loop()
-    {
-        m_event_sc->runEventLoop();
-    }
-
     static std::shared_ptr<RUNNER> runner_init(const YAML::Node &_sm_config);
-    virtual ~RUNNER() {}
+    virtual ~RUNNER()
+    {
+        m_logger.log("runner destructed");
+    }
 };
 
 #endif // _RUNNER_H_

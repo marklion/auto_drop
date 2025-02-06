@@ -2,7 +2,7 @@ SHELL=/bin/bash
 SRC_DIR:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 SRC_DIR:=$(SRC_DIR)/src
 DELIVER_PATH=$(SRC_DIR)/../build
-SUB_DIR=sm public core rpc
+SUB_DIR=sm public core rpc driver cli
 BUILD_MODE=build
 OUTBOUND_DELIVER_PATH=$(DELIVER_PATH)
 export BUILD_MODE
@@ -10,7 +10,7 @@ export OUTBOUND_DELIVER_PATH
 
 .SILENT:
 pack:all
-	tar zcf ad_deliver.tar.gz -C $(DELIVER_PATH) bin lib
+	tar zcf ad_deliver.tar.gz -C $(DELIVER_PATH) bin lib conf
 	cat $(SRC_DIR)/../deploy.sh ad_deliver.tar.gz > $(DELIVER_PATH)/install.sh
 	chmod +x $(DELIVER_PATH)/install.sh
 	rm ad_deliver.tar.gz
@@ -24,6 +24,9 @@ $(SUB_DIR):
 	$(MAKE) -C $(SRC_DIR)/$@
 
 sm:public
+rpc:public
+driver:rpc
+cli:rpc
 core:sm rpc
 
 clean:

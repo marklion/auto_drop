@@ -8,4 +8,9 @@ add_compile_options(-std=gnu++14 -g)
 
 aux_source_directory(utils/ UTILS_SRC)
 aux_source_directory(event_sc/ EVENT_SC_SRC)
+aux_source_directory(./ MAIN_SRC)
+
 add_library(ad_utils SHARED ${UTILS_SRC} ${EVENT_SC_SRC})
+add_executable(public_test ${MAIN_SRC})
+
+target_link_libraries(public_test ad_utils)

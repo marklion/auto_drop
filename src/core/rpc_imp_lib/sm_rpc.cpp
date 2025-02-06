@@ -1,0 +1,56 @@
+#include "sm_rpc.h"
+#include "../../rpc/ad_rpc.h"
+#include "../../rpc/gen_code/cpp/driver_service.h"
+
+void runner_sm_impl::push_sm_event(const std::string &event_name)
+{
+    m_runner->proc_event(event_name);
+}
+
+void runner_sm_impl::get_sm_state_string(std::string &_return)
+{
+    ad_gen_exp exp;
+    exp.msg = "mock";
+    throw exp;
+    _return = m_runner->m_current_state->m_state_name;
+}
+
+bool runner_sm_impl::match_device(const std::string &use_for, const u16 port)
+{
+    bool ret = false;
+    m_runner->set_device(use_for, port);
+    auto ad_rpc_sc = AD_RPC_SC::get_instance();
+    ad_rpc_sc->call_remote<driver_serviceClient>(
+        port,
+        "driver_service",
+        [&](driver_serviceClient &client)
+        {
+            ret = client.set_sm(ad_rpc_sc->get_listen_port());
+        });
+    return ret;
+}
+
+bool runner_sm_impl::clear_device(const std::string &use_for)
+{
+    bool ret = false;
+    auto device_port = m_runner->get_device(use_for);
+
+    auto ad_rpc_sc = AD_RPC_SC::get_instance();
+    ad_rpc_sc->call_remote<driver_serviceClient>(
+        device_port,
+        "driver_service",
+        [&](driver_serviceClient &client)
+        {
+            ret = client.set_sm(0);
+        });
+    if (ret)
+    {
+        m_runner->set_device(use_for, 0);
+    }
+    return ret;
+}
+
+void runner_sm_impl::stop_sm()
+{
+    AD_RPC_SC::get_instance()->stop_server();
+}

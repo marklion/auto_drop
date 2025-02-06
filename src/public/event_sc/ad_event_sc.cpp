@@ -21,6 +21,7 @@ AD_EVENT_SC::AD_EVENT_SC() : m_logger("", "EVENT_SC")
 
 AD_EVENT_SC::~AD_EVENT_SC()
 {
+    stopEventLoop();
     close(m_epollFd);
 }
 
@@ -72,19 +73,45 @@ AD_EVENT_SC_TIMER_NODE_PTR AD_EVENT_SC::startTimer(int _timeout, std::function<v
 {
     auto timer = std::make_shared<AD_EVENT_SC_TIMER_NODE>(_timeout, _callback);
     registerNode(timer);
+    m_logger.log(AD_LOGGER::DEBUG, "Start %ds timer", _timeout);
     return timer;
 }
 
 void AD_EVENT_SC::stopTimer(AD_EVENT_SC_TIMER_NODE_PTR _timer)
 {
     unregisterNode(_timer);
+    m_logger.log(AD_LOGGER::DEBUG, "Stop timer");
+}
+
+class AD_CO_EVENT_NODE : public AD_EVENT_SC_NODE
+{
+    AD_EVENT_SC_PTR m_event_sc;
+    AD_CO_ROUTINE_PTR m_co;
+    int m_fd = -1;
+
+public:
+    AD_CO_EVENT_NODE(AD_EVENT_SC_PTR _event_sc, int _fd) : m_event_sc(_event_sc), m_co(_event_sc->get_current_co()), m_fd(_fd)
+    {
+    }
+    virtual int getFd() const override
+    {
+        return m_fd;
+    }
+    virtual void handleEvent() override
+    {
+        m_co->set_co_state(AD_CO_ROUTINE::ACR_STATE_READY);
+        m_event_sc->unregisterNode(shared_from_this());
+    }
+};
+void AD_EVENT_SC::yield_by_fd(int _fd)
+{
+    auto co_node = std::make_shared<AD_CO_EVENT_NODE>(std::static_pointer_cast<AD_EVENT_SC>(shared_from_this()), _fd);
+    registerNode(co_node);
+    yield_co();
 }
 
 void AD_EVENT_SC::runEventLoop()
 {
-    const int MAX_EVENTS = 10;
-    struct epoll_event events[MAX_EVENTS];
-
     while (m_fdToNode.size() > 0)
     {
         handleEvent();
@@ -110,8 +137,38 @@ int AD_EVENT_SC::getFd() const
 
 void AD_EVENT_SC::handleEvent()
 {
+    while (true)
+    {
+        bool has_ready_co = false;
+        for (auto itr = m_co_routines.begin(); itr != m_co_routines.end();)
+        {
+            auto &co = *itr;
+            if (co->get_co_state() == AD_CO_ROUTINE::ACR_STATE_READY)
+            {
+                has_ready_co = true;
+                resume_co(co);
+            }
+            if (co->get_co_state() == AD_CO_ROUTINE::ACR_STATE_DEAD)
+            {
+                itr = m_co_routines.erase(itr);
+            }
+            else
+            {
+
+                itr++;
+            }
+        }
+        if (!has_ready_co)
+        {
+            break;
+        }
+    }
     const int MAX_EVENTS = 10;
     struct epoll_event events[MAX_EVENTS] = {0};
+    if (m_fdToNode.size() == 0)
+    {
+        return;
+    }
     int n = epoll_wait(m_epollFd, events, MAX_EVENTS, -1); // 阻塞等待事件
     if (n != -1)
     {
@@ -120,8 +177,10 @@ void AD_EVENT_SC::handleEvent()
             int fd = events[i].data.fd;
             if (m_fdToNode.find(fd) != m_fdToNode.end())
             {
-                // 调用对应的处理函数
-                m_fdToNode[fd]->handleEvent();
+                auto p_event_node = m_fdToNode[fd];
+                add_co(
+                    [p_event_node]()
+                    { p_event_node->handleEvent(); });
             }
         }
     }
@@ -214,7 +273,7 @@ AD_EVENT_SC_TCP_LISTEN_NODE::AD_EVENT_SC_TCP_LISTEN_NODE(
     CREATE_DATA_FUNC _create_data_func,
     AD_EVENT_SC_PTR _event_sc) : m_logger("", "TCP_LISTEN" + std::to_string(_port)),
                                  m_create_data_func(_create_data_func),
-                                 m_event_sc(_event_sc)
+                                 m_event_sc(_event_sc),m_port(_port)
 {
     auto listen_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (listen_fd >= 0)
@@ -265,7 +324,7 @@ void AD_EVENT_SC_TCP_LISTEN_NODE::handleEvent()
     auto data_fd = accept(m_listen_fd, (sockaddr *)&addr, &addr_len);
     if (data_fd >= 0)
     {
-        auto data_node = m_create_data_func(data_fd, shared_from_this());
+        auto data_node = m_create_data_func(data_fd, std::static_pointer_cast<AD_EVENT_SC_TCP_LISTEN_NODE>(shared_from_this()));
         m_fd_to_data_node[data_fd] = data_node;
         m_event_sc->registerNode(data_node);
     }
@@ -282,4 +341,29 @@ void AD_EVENT_SC_TCP_LISTEN_NODE::close_data_node(int _fd)
         m_event_sc->unregisterNode(m_fd_to_data_node[_fd]);
         m_fd_to_data_node.erase(_fd);
     }
+}
+static void co_routine_func(AD_CO_ROUTINE *_co)
+{
+    _co->m_func();
+    _co->set_co_state(AD_CO_ROUTINE::ACR_STATE_DEAD);
+}
+static long g_co_id = 0;
+AD_CO_ROUTINE::AD_CO_ROUTINE(AD_CO_ROUTINE_FUNC _func, ucontext_t *_main_co) : m_func(_func), m_logger("", "CO_ROUTINE" + std::to_string(g_co_id))
+{
+    getcontext(&m_context);
+    m_context.uc_stack.ss_sp = m_stacks;
+    m_context.uc_stack.ss_size = sizeof(m_stacks);
+    m_context.uc_link = _main_co;
+    makecontext(&m_context, (void (*)())co_routine_func, 1, this);
+    g_co_id++;
+    g_co_id %= 1024;
+    m_logger.log(AD_LOGGER::DEBUG, "Create co");
+}
+
+ucontext_t AD_CO_ROUTINE::m_global_context;
+
+void AD_CO_ROUTINE::co_run(std::function<void()> _main_func)
+{
+    auto init_co = std::make_shared<AD_CO_ROUTINE>(_main_func, &m_global_context);
+    init_co->resume(&m_global_context);
 }

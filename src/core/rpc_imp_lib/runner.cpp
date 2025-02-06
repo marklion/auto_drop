@@ -15,7 +15,7 @@ std::shared_ptr<RUNNER> RUNNER::runner_init(const YAML::Node &_sm_config)
         [](DYNAMIC_SM &_sm)
         {
             auto &runner_sm = dynamic_cast<RUNNER &>(_sm);
-            runner_sm.record_order_number("mock_order_number");
+            runner_sm.record_order_number();
         });
     sm_state_fac->register_actions(
         "broadcast_driver_in",

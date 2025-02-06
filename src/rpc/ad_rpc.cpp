@@ -11,6 +11,7 @@ public:
     using AD_EVENT_SC_TCP_DATA_NODE::AD_EVENT_SC_TCP_DATA_NODE;
     void handleRead(const unsigned char *buf, size_t len) override
     {
+        m_logger.log(AD_LOGGER::DEBUG, "rpc_server recv");
         m_logger.log_packet(AD_LOGGER::DEBUG, buf, len);
         auto it = std::make_shared<apache::thrift::transport::TMemoryBuffer>((uint8_t *)buf, len);
         auto it_ad_trans = std::make_shared<AD_RPC_TRANSPORT>(it);
@@ -20,9 +21,9 @@ public:
         auto op = std::make_shared<apache::thrift::protocol::TBinaryProtocol>(ot_ad_trans);
         m_processor->process(ip, op, nullptr);
         auto reply = ot->getBufferAsString();
-        signal(SIGPIPE, SIG_IGN);
+        m_logger.log(AD_LOGGER::DEBUG, "rpc_server send");
+        m_logger.log_packet(AD_LOGGER::DEBUG, (const unsigned char *)reply.c_str(), reply.size());
         send(getFd(), reply.c_str(), reply.size(), SOCK_NONBLOCK);
-        signal(SIGPIPE, SIG_DFL);
     }
     void add_processor(const std::string &service_name, std::shared_ptr<apache::thrift::TProcessor> processor)
     {
@@ -42,3 +43,5 @@ AD_EVENT_SC_TCP_DATA_NODE_PTR AD_RPC_EVENT_NODE::create_rpc_tcp_data_node(int fd
 
     return ret;
 }
+
+std::shared_ptr<AD_RPC_SC> AD_RPC_SC::m_single;
