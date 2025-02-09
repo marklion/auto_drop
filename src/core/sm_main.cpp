@@ -4,6 +4,7 @@
 
 int main(int argc, char const *argv[])
 {
+    AD_LOGGER::set_log_level(AD_LOGGER::DEBUG);
     auto sc = AD_RPC_SC::get_instance();
     sc->enable_rpc_server(std::stoul(argv[1]));
     auto runner = RUNNER::runner_init(YAML::LoadFile(argv[2])["sm"]);
