@@ -6,6 +6,7 @@
 #include <vector>
 #include <map>
 #include <yaml-cpp/yaml.h>
+#include <lua5.3/lua.hpp>
 #include "../../public/utils/ad_utils.h"
 
 class DYNAMIC_SM;
