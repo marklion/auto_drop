@@ -7,6 +7,7 @@
 #include "../../rpc/gen_code/cpp/driver_service.h"
 #include "../../rpc/gen_code/cpp/runner_sm.h"
 #include "../../public/const_var_define.h"
+#include "rpc_wrapper.h"
 
 u16 config_management_impl::start_daemon(const std::string &_path, const std::vector<std::string> &_argv, const std::string &_name)
 {
@@ -67,13 +68,9 @@ void config_management_impl::stop_device(const u16 port)
     if (m_device_map.find(port) != m_device_map.end())
     {
         m_device_map.erase(port);
-        AD_RPC_SC::get_instance()->call_remote<driver_serviceClient>(
-            port,
-            "driver_service",
-            [](driver_serviceClient &client)
-            {
-                client.stop_device();
-            });
+        rpc_wrapper_call_device(
+            port, [&](driver_serviceClient &client)
+            { client.stop_device(); });
     }
 }
 
@@ -109,7 +106,7 @@ void config_management_impl::stop_sm(const u16 port)
         m_sm_map.erase(port);
         AD_RPC_SC::get_instance()->call_remote<runner_smClient>(
             port,
-            "driver_service",
+            "runner_sm",
             [](runner_smClient &client)
             {
                 client.stop_sm();

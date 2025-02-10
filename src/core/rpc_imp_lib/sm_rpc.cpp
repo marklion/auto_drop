@@ -1,6 +1,7 @@
 #include "sm_rpc.h"
 #include "../../rpc/ad_rpc.h"
 #include "../../rpc/gen_code/cpp/driver_service.h"
+#include "rpc_wrapper.h"
 
 void runner_sm_impl::push_sm_event(const std::string &event_name)
 {
@@ -20,9 +21,8 @@ bool runner_sm_impl::match_device(const std::string &use_for, const u16 port)
     bool ret = false;
     m_runner->set_device(use_for, port);
     auto ad_rpc_sc = AD_RPC_SC::get_instance();
-    ad_rpc_sc->call_remote<driver_serviceClient>(
+    rpc_wrapper_call_device(
         port,
-        "driver_service",
         [&](driver_serviceClient &client)
         {
             ret = client.set_sm(ad_rpc_sc->get_listen_port());
@@ -35,10 +35,8 @@ bool runner_sm_impl::clear_device(const std::string &use_for)
     bool ret = false;
     auto device_port = m_runner->get_device(use_for);
 
-    auto ad_rpc_sc = AD_RPC_SC::get_instance();
-    ad_rpc_sc->call_remote<driver_serviceClient>(
+    rpc_wrapper_call_device(
         device_port,
-        "driver_service",
         [&](driver_serviceClient &client)
         {
             ret = client.set_sm(0);

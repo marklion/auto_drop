@@ -107,7 +107,7 @@ public:
         return m_L;
     }
     virtual void register_lua_function_virt(lua_State *_L) = 0;
-    void reigster_lua_function()
+    void register_lua_function()
     {
         luabridge::getGlobalNamespace(m_L)
             .beginClass<DYNAMIC_SM>("DYNAMIC_SM")
@@ -122,11 +122,12 @@ public:
         m_current_state = std::move(_next_state);
         m_current_state->before_enter(*this);
     }
+    template <typename T>
     void begin()
     {
         luaL_openlibs(m_L);
-        reigster_lua_function();
-        luabridge::setGlobal(m_L, this, "sm");
+        register_lua_function();
+        luabridge::setGlobal(m_L, (T *)this, "sm");
         m_current_state->before_enter(*this);
         trigger();
     }

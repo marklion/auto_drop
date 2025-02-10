@@ -5,6 +5,7 @@
 #include "../../rpc/ad_rpc.h"
 #include "../../rpc/gen_code/cpp/driver_service.h"
 #include "../../public/const_var_define.h"
+#include "rpc_wrapper.h"
 
 typedef std::function<void()> CLEAR_FUNC;
 class RV_FATHER
@@ -60,7 +61,9 @@ class RUNNER : public DYNAMIC_SM, public RV_FATHER
         }
     };
     std::map<std::string, uint16_t> m_device_map;
+    std::string test_var;
 public:
+    virtual void register_lua_function_virt(lua_State *_L) override;
     void set_device(const std::string &_device_name, const uint16_t _device_id)
     {
         m_device_map[_device_name] = _device_id;
@@ -81,79 +84,44 @@ public:
     }
     std::shared_ptr<AD_EVENT_SC> m_event_sc = std::make_shared<AD_EVENT_SC>();
     AD_LOGGER m_logger = AD_LOGGER("", "runner");
-    RUNNER_VARIBLES<std::string> cur_order_number =
-        RUNNER_VARIBLES<std::string>("", *this);
-    RUNNER_VARIBLES<double> init_p_weight =
-        RUNNER_VARIBLES<double>(
-            0.0,
-            *this,
-            [](double &var)
-            {
-                var = 0.0;
-            });
-    RUNNER_VARIBLES<AD_EVENT_SC_TIMER_NODE_PTR> m_2s_timer =
-        RUNNER_VARIBLES<AD_EVENT_SC_TIMER_NODE_PTR>(
-            nullptr,
-            *this,
-            m_clear_timer_func);
-    RUNNER_VARIBLES<AD_EVENT_SC_TIMER_NODE_PTR> m_5s_timer =
-        RUNNER_VARIBLES<AD_EVENT_SC_TIMER_NODE_PTR>(
-            nullptr,
-            *this,
-            m_clear_timer_func);
-    void clear_all_variables()
-    {
-        m_logger.log("clear all variables");
-        clear_all();
-    }
-    void start_2s_timer()
-    {
-        m_logger.log("start 2s timer");
-        m_2s_timer = m_event_sc->startTimer(2, [this]()
-                                            { proc_event("nothing"); });
-    }
-    void record_order_number()
-    {
-        std::string latest_plate;
-        AD_RPC_SC::get_instance()->call_remote<driver_serviceClient>(
-            get_device(AD_CONST_DEVICE_PLATE_CAMERA),
-            "driver_service",
-            [&](driver_serviceClient &client){
-                client.get_trigger_vehicle_plate(latest_plate);
-            });
-        m_logger.log("record order number: %s", latest_plate.c_str());
-        cur_order_number = latest_plate;
-    }
-    void stop_2s_timer()
-    {
-        m_logger.log("stop 2s timer");
-        m_2s_timer.clear();
-    }
-    void start_5s_timer()
-    {
-        m_logger.log("start 5s timer");
-        m_5s_timer = m_event_sc->startTimer(5, [this]()
-                                            { proc_event("reset"); });
-    }
-    void stop_5s_timer()
-    {
-        m_logger.log("stop 5s timer");
-        m_5s_timer.clear();
-    }
     void broadcast_driver_in()
     {
         m_logger.log("broadcast driver in");
-        AD_RPC_SC::get_instance()->call_remote<driver_serviceClient>(
+        rpc_wrapper_call_device(
             get_device(AD_CONST_DEVICE_LED),
-            "driver_service",
-            [&](driver_serviceClient &client)
-            {
+            [&](driver_serviceClient &client){
                 client.voice_broadcast("please enter");
             });
     }
     void clear_broadcast()
     {
         m_logger.log("clear broadcast");
+    }
+
+    AD_EVENT_SC_TIMER_NODE_PTR start_timer(int _sec, luabridge::LuaRef _func)
+    {
+        AD_EVENT_SC_TIMER_NODE_PTR ret;
+        if (_func.isFunction())
+        {
+            ret = m_event_sc->startTimer(_sec, [_func](){
+                _func();
+            });
+        }
+        return ret;
+    }
+    void stop_timer(AD_EVENT_SC_TIMER_NODE_PTR _timer) {
+        if (_timer) {
+            m_event_sc->stopTimer(_timer);
+        }
+    }
+
+    void set_test_var(const std::string &_var)
+    {
+        test_var = _var;
+    }
+    std::string get_test_var()
+    {
+        return test_var;
     }
 
     static std::shared_ptr<RUNNER> runner_init(const YAML::Node &_sm_config);
