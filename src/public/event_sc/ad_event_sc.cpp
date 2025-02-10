@@ -21,6 +21,7 @@ AD_EVENT_SC::AD_EVENT_SC() : m_logger("", "EVENT_SC")
 
 AD_EVENT_SC::~AD_EVENT_SC()
 {
+    m_co_routines.clear();
     stopEventLoop();
     close(m_epollFd);
 }

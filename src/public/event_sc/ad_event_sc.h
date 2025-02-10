@@ -133,10 +133,11 @@ public:
         m_current_co.reset();
         p_tmp->yield(&m_main_context);
     }
-    void add_co(AD_CO_ROUTINE_FUNC _func)
+    AD_CO_ROUTINE_PTR add_co(AD_CO_ROUTINE_FUNC _func)
     {
         auto co = std::make_shared<AD_CO_ROUTINE>(_func, &m_main_context);
         m_co_routines.push_back(co);
+        return co;
     }
 
 private:

@@ -24,7 +24,7 @@
 #define AD_CONST_SM_EVENT_STUFF_EMPTY "stuff_empty"
 #define AD_CONST_SM_EVENT_END_POSTION "end_postion"
 #define AD_CONST_SM_EVENT_WEIGHT_CLEAR "weight_clear"
-
-
 #define AD_CONST_SM_EVENT_RESET "reset"
+
+#define AD_CONST_CONFIG_FILE "/conf/config.yaml"
 #endif // _CONST_VAR_DEFINE_H_

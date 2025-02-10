@@ -13,7 +13,7 @@ SM_STATE_PTR SM_STATE_FACTORY::create_sm_state(const std::string &_name)
 
             auto enter_func = itr["enter"].as<std::string>();
             auto exit_func = itr["exit"].as<std::string>();
-            auto do_func = itr["do"]["actions"].as<std::string>();
+            auto do_func = itr["do"]["action"].as<std::string>();
             auto next_state = itr["do"]["next"].as<std::string>("");
             auto tmp_state = new SM_STATE(state_name, enter_func, exit_func, do_func, next_state, shared_from_this());
             ret.reset(tmp_state);
