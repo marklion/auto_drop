@@ -52,3 +52,23 @@ void runner_sm_impl::stop_sm()
 {
     AD_RPC_SC::get_instance()->stop_server();
 }
+
+bool runner_sm_impl::check_lua_code(const std::string &code)
+{
+    bool ret = false;
+
+    auto p_tmp_runner = RUNNER::runner_init(YAML::LoadFile("/conf/sample.yaml")["sm"]);
+    auto check_ret = p_tmp_runner->check_lua_code(code);
+    if (check_ret.empty())
+    {
+        ret = true;
+    }
+    else
+    {
+        ad_gen_exp exp;
+        exp.msg = "lua code error:" + check_ret;
+        throw exp;
+    }
+
+    return ret;
+}

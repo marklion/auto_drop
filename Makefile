@@ -26,7 +26,7 @@ $(SUB_DIR):
 sm:public
 rpc:public
 driver:rpc
-cli:rpc
+cli:core
 core:sm rpc
 
 clean:

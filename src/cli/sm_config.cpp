@@ -1,4 +1,5 @@
 #include "sm_config.h"
+#include "../core/rpc_imp_lib/sm_rpc.h"
 static YAML::Node get_state_from_sm(YAML::Node _sm, const std::string &_state_name)
 {
     auto states = _sm["states"];
@@ -139,6 +140,21 @@ static std::string get_current_action(const std::string &_state_name, const std:
     }
     return ret;
 }
+static std::string check_lua_code(const std::string &_code)
+{
+    std::string ret;
+    try
+    {
+        runner_sm_impl tmp_sm_rpc(nullptr);
+        tmp_sm_rpc.check_lua_code(_code);
+    }
+    catch(const ad_gen_exp& e)
+    {
+        ret = e.msg;
+    }
+
+    return ret;
+}
 static std::string change_state_action(const std::string &_state_name, const std::string &_action_type, const std::string &_lua_code)
 {
     std::string ret;
@@ -166,15 +182,23 @@ static std::string change_state_action(const std::string &_state_name, const std
         }
         else
         {
-            if (_action_type == "do")
+            auto lua_check_ret = check_lua_code(_lua_code);
+            if (!lua_check_ret.empty())
             {
-                sm_state_config["do"]["action"] = _lua_code;
+                ret += lua_check_ret + "\n";
             }
             else
             {
-                sm_state_config[_action_type] = _lua_code;
+                if (_action_type == "do")
+                {
+                    sm_state_config["do"]["action"] = _lua_code;
+                }
+                else
+                {
+                    sm_state_config[_action_type] = _lua_code;
+                }
+                common_cli::write_config_file(orig_node);
             }
-            common_cli::write_config_file(orig_node);
         }
     }
     return ret;

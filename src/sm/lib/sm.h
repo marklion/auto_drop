@@ -150,6 +150,16 @@ public:
             trigger();
         }
     }
+    std::string check_lua_code(const std::string &_code)
+    {
+        std::string ret;
+        auto lua_ret = luaL_loadstring(m_L, _code.c_str());
+        if (lua_ret != LUA_OK)
+        {
+            ret = lua_tostring(m_L, -1);
+        }
+        return ret;
+    }
     virtual ~DYNAMIC_SM()
     {
         lua_close(m_L);

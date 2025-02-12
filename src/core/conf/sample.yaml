@@ -1,33 +1,10 @@
 sm:
-  lua_functions:
-    - &set_test_var |
-        sm:set_test_var("test var")
-        tmp_var = "11221"
-        function one_func()
-            print("one_func_called"..sm:get_test_var())
-            sm:stop_timer(timer_handler)
-        end
-        timer_handler = sm:start_timer(2, one_func)
-    - &get_test_var |
-        print(sm:get_test_var())
-        print(tmp_var)
-        sm:proc_event("no_thing")
   init_state: 'idle'
   states:
     - name: 'idle'
-      enter: *set_test_var
-      exit: ''
-      do:
-        actions: ''
-        next: 'p_weight_compare'
-      events:
-        - trigger: 'vehicle_arrived'
-          next: 'p_weight_compare'
-    - name: 'p_weight_compare'
       enter: ''
       exit: ''
       do:
-        actions: *get_test_var
-      events:
-        - trigger: 'reset'
-          next: 'idle'
+        action: ''
+        next: ''
+      events: []
