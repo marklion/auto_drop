@@ -107,6 +107,7 @@ public:
     void stopTimer(AD_EVENT_SC_TIMER_NODE_PTR _timer);
 
     void yield_by_fd(int _fd);
+    void yield_by_timer(int _timeout);
 
     // 运行事件循环
     void runEventLoop();

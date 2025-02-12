@@ -10,7 +10,7 @@ class config_management_impl : public config_managementIf
 {
     std::unordered_map<u16, device_config> m_device_map;
     std::unordered_map<u16, sm_config> m_sm_map;
-    AD_LOGGER m_logger = AD_LOGGER("", "config_management");
+    AD_LOGGER m_logger = AD_LOGGER("config_management");
     u16 start_daemon(const std::string &_path, const std::vector<std::string> &_argv, const std::string &_name);
 public:
     virtual void start_device(device_config &_return, const std::string &driver_name, const std::vector<std::string> &argv, const std::string &device_name) override;

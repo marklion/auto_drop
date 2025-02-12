@@ -37,6 +37,7 @@
 #include "scheduler.h"
 #include "../public/event_sc/ad_event_sc.h"
 #include "../rpc/ad_rpc.h"
+#include "clilocalsession.h"
 
 namespace cli
 {
@@ -69,9 +70,9 @@ namespace cli
             }
         }
 
-        void Run()
+        void Run(CliLocalSession &ss)
         {
-            while (ExecOne())
+            while (ExecOne(ss))
             {
             };
         }
@@ -91,12 +92,14 @@ namespace cli
             }
         }
 
-        bool ExecOne()
+        bool ExecOne(CliLocalSession &ss)
         {
             std::function<void()> task;
             {
                 m_tmp_co = AD_RPC_SC::get_instance()->get_current_co();
+                ss.kb.enable_event();
                 AD_RPC_SC::get_instance()->yield_co();
+                ss.kb.disable_event();
                 if (!running)
                     return false;
                 task = tasks.front();

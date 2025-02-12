@@ -10,7 +10,7 @@
 #include <arpa/inet.h>
 #include "ad_event_sc.h"
 
-AD_EVENT_SC::AD_EVENT_SC() : m_logger("", "EVENT_SC")
+AD_EVENT_SC::AD_EVENT_SC() : m_logger("EVENT_SC")
 {
     m_epollFd = epoll_create1(0);
     if (m_epollFd == -1)
@@ -111,6 +111,16 @@ void AD_EVENT_SC::yield_by_fd(int _fd)
     yield_co();
 }
 
+void AD_EVENT_SC::yield_by_timer(int _timeout)
+{
+    auto cur_cor = m_current_co;
+    AD_EVENT_SC_TIMER_NODE_PTR timer = startTimer(_timeout, [&]() {
+        stopTimer(timer);
+        cur_cor->set_co_state(AD_CO_ROUTINE::ACR_STATE_READY);
+    });
+    yield_co();
+}
+
 void AD_EVENT_SC::runEventLoop()
 {
     while (m_fdToNode.size() > 0)
@@ -191,7 +201,7 @@ void AD_EVENT_SC::handleEvent()
     }
 }
 
-AD_EVENT_SC_TIMER_NODE::AD_EVENT_SC_TIMER_NODE(int _timeout, std::function<void()> _callback) : m_callback(_callback), m_timeout(_timeout), m_logger("", "TIMER")
+AD_EVENT_SC_TIMER_NODE::AD_EVENT_SC_TIMER_NODE(int _timeout, std::function<void()> _callback) : m_callback(_callback), m_timeout(_timeout), m_logger( "TIMER")
 {
     auto fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
     if (fd >= 0)
@@ -238,7 +248,7 @@ void AD_EVENT_SC_TIMER_NODE::handleEvent()
     }
 }
 
-AD_EVENT_SC_TCP_DATA_NODE::AD_EVENT_SC_TCP_DATA_NODE(int _fd, AD_EVENT_SC_TCP_LISTEN_NODE_PTR _listen_node) : m_fd(_fd), m_listen_node(_listen_node), m_logger("", "TCP_DATA" + std::to_string(_fd))
+AD_EVENT_SC_TCP_DATA_NODE::AD_EVENT_SC_TCP_DATA_NODE(int _fd, AD_EVENT_SC_TCP_LISTEN_NODE_PTR _listen_node) : m_fd(_fd), m_listen_node(_listen_node), m_logger( "TCP_DATA" + std::to_string(_fd))
 {
 }
 
@@ -272,7 +282,7 @@ void AD_EVENT_SC_TCP_DATA_NODE::handleEvent()
 AD_EVENT_SC_TCP_LISTEN_NODE::AD_EVENT_SC_TCP_LISTEN_NODE(
     unsigned short _port,
     CREATE_DATA_FUNC _create_data_func,
-    AD_EVENT_SC_PTR _event_sc) : m_logger("", "TCP_LISTEN" + std::to_string(_port)),
+    AD_EVENT_SC_PTR _event_sc) : m_logger( "TCP_LISTEN" + std::to_string(_port)),
                                  m_create_data_func(_create_data_func),
                                  m_event_sc(_event_sc),m_port(_port)
 {
@@ -349,7 +359,7 @@ static void co_routine_func(AD_CO_ROUTINE *_co)
     _co->set_co_state(AD_CO_ROUTINE::ACR_STATE_DEAD);
 }
 static long g_co_id = 0;
-AD_CO_ROUTINE::AD_CO_ROUTINE(AD_CO_ROUTINE_FUNC _func, ucontext_t *_main_co) : m_func(_func), m_logger("", "CO_ROUTINE" + std::to_string(g_co_id))
+AD_CO_ROUTINE::AD_CO_ROUTINE(AD_CO_ROUTINE_FUNC _func, ucontext_t *_main_co) : m_func(_func), m_logger("CO_ROUTINE" + std::to_string(g_co_id))
 {
     getcontext(&m_context);
     m_context.uc_stack.ss_sp = m_stacks;

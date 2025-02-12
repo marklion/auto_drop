@@ -6,7 +6,7 @@
 class my_rpc_trans : public AD_EVENT_SC_TCP_DATA_NODE
 {
     std::shared_ptr<apache::thrift::TMultiplexedProcessor> m_processor = std::make_shared<apache::thrift::TMultiplexedProcessor>();
-    AD_LOGGER m_logger = AD_LOGGER("", "rpc");
+    AD_LOGGER m_logger = AD_LOGGER("rpc");
 public:
     using AD_EVENT_SC_TCP_DATA_NODE::AD_EVENT_SC_TCP_DATA_NODE;
     void handleRead(const unsigned char *buf, size_t len) override

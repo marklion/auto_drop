@@ -50,6 +50,7 @@ service driver_service{
     oneway void voice_broadcast(1:string voice_content),
     string get_trigger_vehicle_plate() throws (1:ad_gen_exp exp),
     vehicle_rd_detect_result vehicle_rd_detect() throws (1:ad_gen_exp exp),
+    bool vehicle_passed_gate() throws (1:ad_gen_exp exp),
     oneway void sim_vehicle_came(1:string plate),
     oneway void sim_gate_status(1:bool is_close),
     oneway void sim_scale_weight(1:double weight),

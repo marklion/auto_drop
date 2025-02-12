@@ -61,7 +61,6 @@ class RUNNER : public DYNAMIC_SM, public RV_FATHER
         }
     };
     std::map<std::string, uint16_t> m_device_map;
-    std::string test_var;
 public:
     virtual void register_lua_function_virt(lua_State *_L) override;
     void set_device(const std::string &_device_name, const uint16_t _device_id)
@@ -83,19 +82,45 @@ public:
         return ret;
     }
     std::shared_ptr<AD_EVENT_SC> m_event_sc = std::make_shared<AD_EVENT_SC>();
-    AD_LOGGER m_logger = AD_LOGGER("", "runner");
-    void broadcast_driver_in()
+    AD_LOGGER m_logger = AD_LOGGER("runner");
+    void dev_voice_broadcast(const std::string &_dev_name, const std::string &_content)
     {
         m_logger.log("broadcast driver in");
         rpc_wrapper_call_device(
-            get_device(AD_CONST_DEVICE_LED),
+            get_device(_dev_name),
             [&](driver_serviceClient &client){
-                client.voice_broadcast("please enter");
+                client.voice_broadcast(_content);
             });
     }
-    void clear_broadcast()
+    std::string dev_get_trigger_vehicle_plate(const std::string &_dev_name)
     {
-        m_logger.log("clear broadcast");
+        std::string ret;
+        rpc_wrapper_call_device(
+            get_device(_dev_name),
+            [&](driver_serviceClient &client){
+                client.get_trigger_vehicle_plate(ret);
+            });
+        return ret;
+    }
+    vehicle_rd_detect_result dev_vehicle_rd_detect(const std::string &_dev_name)
+    {
+        vehicle_rd_detect_result ret;
+        rpc_wrapper_call_device(
+            get_device(_dev_name),
+            [&](driver_serviceClient &client){
+                client.vehicle_rd_detect(ret);
+            });
+        return ret;
+    }
+    bool dev_vehicle_passed_gate(const std::string &_dev_name)
+    {
+        bool ret = false;
+        rpc_wrapper_call_device(
+            get_device(_dev_name),
+            [&](driver_serviceClient &client){
+                ret = client.vehicle_passed_gate();
+            });
+        return ret;
     }
 
     AD_EVENT_SC_TIMER_NODE_PTR start_timer(int _sec, luabridge::LuaRef _func)
@@ -115,14 +140,6 @@ public:
         }
     }
 
-    void set_test_var(const std::string &_var)
-    {
-        test_var = _var;
-    }
-    std::string get_test_var()
-    {
-        return test_var;
-    }
 
     static std::shared_ptr<RUNNER> runner_init(const YAML::Node &_sm_config);
     virtual ~RUNNER()

@@ -46,35 +46,22 @@ public:
     };
 
     // 构造函数，默认输出到标准输出
-    AD_LOGGER(const std::string &filepath = "", const std::string &module_name = "None") : log_file(nullptr), m_module_name(module_name)
+    AD_LOGGER(const std::string &module_name = "None") : m_module_name(module_name)
     {
-        if (!filepath.empty())
-        {
-            log_file = new std::ofstream(filepath);
-            if (!log_file->is_open())
-            {
-                std::cerr << "Failed to open log file: " << filepath << std::endl;
-                delete log_file;
-                log_file = nullptr;
-            }
-        }
+
     }
 
     // 析构函数
     ~AD_LOGGER()
     {
-        if (log_file)
-        {
-            log_file->close();
-            delete log_file;
-        }
     }
 
-    // 设置全局日志等级
-    static void set_log_level(LogLevel level)
+    static void set_global_log_level(LogLevel level)
     {
         global_log_level = level;
     }
+
+    void output_log(const std::string &_content);
 
     // 日志记录函数
     void log(LogLevel level, const std::string &format, ...)
@@ -92,14 +79,7 @@ public:
 
         std::string log_message = "[" + ad_utils_date_time().m_datetime_ms + "] [" + level_to_string(level) + "] [" + m_module_name+ "] " + buffer;
 
-        if (log_file)
-        {
-            *log_file << log_message << std::endl;
-        }
-        else
-        {
-            std::cout << log_message << std::endl;
-        }
+        output_log(log_message);
     }
 
     // 重载log函数，默认日志等级为INFO
@@ -129,19 +109,11 @@ public:
 
         std::string log_message = oss.str();
 
-        if (log_file)
-        {
-            *log_file << log_message << std::endl;
-        }
-        else
-        {
-            std::cout << log_message << std::endl;
-        }
+        output_log(log_message);
     }
 
 private:
     std::string m_module_name;
-    std::ofstream *log_file;
     static LogLevel global_log_level;
     // 将日志等级转换为字符串
     std::string level_to_string(LogLevel level)

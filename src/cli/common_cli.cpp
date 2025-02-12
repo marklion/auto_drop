@@ -24,7 +24,7 @@ std::string common_cli::check_params(const std::vector<std::string> &_params, ui
     std::string ret;
     if (_params.size() <= _index)
     {
-        ret = "第" + std::to_string(_index + 1) + "个参数无效，要求传入" + _prompt;
+        ret = "第" + std::to_string(_index + 1) + "个参数无效，要求传入" + _prompt + "\n";
     }
 
     return ret;

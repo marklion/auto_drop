@@ -2,7 +2,6 @@
 
 int main(int argc, char const *argv[])
 {
-    AD_LOGGER::set_log_level(AD_LOGGER::DEBUG);
     auto sc = std::make_shared<AD_EVENT_SC>();
     sc->startTimer(4, [&](){
         std::cout << "timer 4s" << std::endl;

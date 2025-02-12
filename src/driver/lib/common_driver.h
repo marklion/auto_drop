@@ -17,7 +17,7 @@ protected:
     AD_LOGGER m_logger;
     u16 m_sm_port = 0;
 public:
-    common_driver(const std::string &_driver_name) : m_logger("", _driver_name)
+    common_driver(const std::string &_driver_name) : m_logger( _driver_name)
     {
     }
     virtual bool set_sm(const u16 sm_port) override final;
@@ -33,6 +33,7 @@ public:
     virtual void sim_scale_weight(const double weight) override final;
     virtual void sim_vehicle_position(const vehicle_position_detect_state::type state) override final;
     virtual void sim_vehicle_stuff(const bool is_full) override final;
+    virtual bool vehicle_passed_gate() override final;
 };
 
 #endif // _COMMON_DRIVER_H_

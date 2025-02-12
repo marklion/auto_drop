@@ -56,7 +56,7 @@ public:
                                                  m_state_name(state_name),
                                                  m_next_state(next_state),
                                                  m_sm_state_factory(sm_state_factory),
-                                                 m_logger("", "SM_STATE " + state_name)
+                                                 m_logger( "SM_STATE " + state_name)
     {
     }
     void call_lua_func(lua_State *_L, const std::string &_func)
@@ -92,7 +92,7 @@ public:
 
 class DYNAMIC_SM
 {
-    AD_LOGGER m_logger = AD_LOGGER("", "sm");
+    AD_LOGGER m_logger = AD_LOGGER("sm");
     lua_State *m_L = luaL_newstate();
 
 public:

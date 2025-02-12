@@ -7,6 +7,7 @@
 
 #define AD_CONST_DEVICE_LED "led"
 #define AD_CONST_DEVICE_PLATE_CAMERA "plate_camera"
+#define AD_CONST_DEVICE_RD "rd"
 
 #define AD_CONST_SM_EVENT_VEHICLE_ARRIVED "vehicle_arrived"
 #define AD_CONST_SM_EVENT_ON_SCALE "vehicle_on_scale"
@@ -27,4 +28,6 @@
 #define AD_CONST_SM_EVENT_RESET "reset"
 
 #define AD_CONST_CONFIG_FILE "/conf/config.yaml"
+#define AD_CONST_LOGFILE_DIR "/var/ad_log"
+#define AD_CONST_LOGFILE_PATH AD_CONST_LOGFILE_DIR"/ad_log.log"
 #endif // _CONST_VAR_DEFINE_H_

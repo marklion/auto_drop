@@ -3,11 +3,67 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/prctl.h>
+#include <sys/wait.h>
+#include <sys/syscall.h>
 #include "../../rpc/ad_rpc.h"
 #include "../../rpc/gen_code/cpp/driver_service.h"
 #include "../../rpc/gen_code/cpp/runner_sm.h"
 #include "../../public/const_var_define.h"
 #include "rpc_wrapper.h"
+
+static int create_sub_process(const std::string &_path, const std::vector<std::string> &_argv)
+{
+    auto pid = fork();
+    if (pid <= 0)
+    {
+        prctl(PR_SET_PDEATHSIG, SIGTERM);
+        char **argv = (char **)malloc((_argv.size() + 1) * sizeof(argv));
+        for (size_t i = 0; i < _argv.size(); i++)
+        {
+            argv[i] = (char *)malloc(_argv[i].length() + 1);
+            strcpy(argv[i], _argv[i].c_str());
+        }
+        argv[_argv.size()] = 0;
+        execv(("/bin/" + _path).c_str(), argv);
+        exit(0);
+    }
+    return pid;
+}
+
+class SUBPROCESS_EVENT_SC_NODE:public AD_EVENT_SC_NODE
+{
+    std::string m_path;
+    std::vector<std::string> m_argv;
+    std::string m_name;
+    int m_pid;
+    AD_LOGGER m_logger;
+    int m_fd;
+public:
+    SUBPROCESS_EVENT_SC_NODE(const std::string &_path, const std::vector<std::string> &_argv, const std::string &_name, int _pid)
+        :m_path(_path),m_argv(_argv),m_name(_name),m_pid(_pid),m_logger( "subprocess " + _name + std::to_string(_pid))
+    {
+        m_fd = syscall(SYS_pidfd_open, _pid, 0);
+    }
+    ~SUBPROCESS_EVENT_SC_NODE()
+    {
+        close(m_fd);
+    }
+    virtual int getFd() const override
+    {
+        return m_fd;
+    }
+    virtual void handleEvent() override
+    {
+        int status;
+        waitpid(m_pid, &status, WNOHANG);
+        if (!WIFEXITED(status))
+        {
+            m_logger.log(AD_LOGGER::ERROR, "subprocess %s exit with code %d", m_name.c_str(), WEXITSTATUS(status));
+            AD_RPC_SC::get_instance()->registerNode(std::make_shared<SUBPROCESS_EVENT_SC_NODE>(m_path, m_argv, m_name, create_sub_process(m_path, m_argv)));
+        }
+        AD_RPC_SC::get_instance()->unregisterNode(shared_from_this());
+    }
+};
 
 u16 config_management_impl::start_daemon(const std::string &_path, const std::vector<std::string> &_argv, const std::string &_name)
 {
@@ -27,20 +83,10 @@ u16 config_management_impl::start_daemon(const std::string &_path, const std::ve
     exec_args.insert(exec_args.begin(), _name);
 
     auto args_size = exec_args.size();
-
-    auto pid = fork();
-    if (pid <= 0)
+    auto pid = create_sub_process(_path, exec_args);
+    if (pid > 0)
     {
-        prctl(PR_SET_PDEATHSIG, SIGTERM);
-        char **argv = (char **)malloc((args_size + 1) * sizeof(argv));
-        for (size_t i = 0; i < args_size; i++)
-        {
-            argv[i] = (char *)malloc(exec_args[i].length() + 1);
-            strcpy(argv[i], exec_args[i].c_str());
-        }
-        argv[args_size] = 0;
-        execv(("/bin/" + _path).c_str(), argv);
-        exit(0);
+        AD_RPC_SC::get_instance()->registerNode(std::make_shared<SUBPROCESS_EVENT_SC_NODE>(_path, exec_args, _name, pid));
     }
     return ret;
 }

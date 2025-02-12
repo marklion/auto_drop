@@ -44,7 +44,7 @@ class Scheduler; // forward declaration
  * @brief CliLocalTerminalSession represents a local session.
  * You should instantiate it to start an interactive prompt on the standard
  * input/output of your application.
- * The handlers of the commands will be invoked in the same thread the @c Scheduler runs. 
+ * The handlers of the commands will be invoked in the same thread the @c Scheduler runs.
  */
 class CliLocalTerminalSession : public CliSession
 {
@@ -52,8 +52,8 @@ public:
 
     /**
      * @brief Construct a new Cli Local Terminal Session object that uses the specified @c std::ostream
-     * for output. You can also specify a size for the command history. 
-     * 
+     * for output. You can also specify a size for the command history.
+     *
      * @param _cli The cli object that defines the menu hierarchy for this session
      * @param scheduler The scheduler that will process the command handlers
      * @param _out the output stream where command output will be printed
@@ -68,8 +68,8 @@ public:
         Prompt();
     }
 
-private:
     detail::Keyboard kb;
+private:
     detail::InputHandler ih;
 };
 

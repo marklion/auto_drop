@@ -119,16 +119,22 @@ class LinuxKeyboard : public InputDevice
 {
     AD_EVENT_SC_NODE_PTR m_event_node;
 public:
+    void enable_event()
+    {
+        AD_RPC_SC::get_instance()->registerNode(m_event_node);
+    }
+    void disable_event()
+    {
+        AD_RPC_SC::get_instance()->unregisterNode(m_event_node);
+    }
     explicit LinuxKeyboard(Scheduler &_scheduler) : InputDevice(_scheduler),m_event_node(std::make_shared<AD_KEYBOARD_EVENT_NODE>(this))
     {
         ToManualMode();
-        AD_RPC_SC::get_instance()->registerNode(m_event_node);
     }
     ~LinuxKeyboard() override
     {
         ToStandardMode();
         is.Stop();
-        AD_RPC_SC::get_instance()->unregisterNode(m_event_node);
     }
 
     void Read() noexcept
