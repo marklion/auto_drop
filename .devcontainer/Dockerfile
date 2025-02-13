@@ -15,3 +15,4 @@ RUN unzip LuaBridge-master.zip
 WORKDIR /software/LuaBridge-master
 RUN cp -a Source/LuaBridge /usr/include/
 WORKDIR /root/
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y libpam-dev
