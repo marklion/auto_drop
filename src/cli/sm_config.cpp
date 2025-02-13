@@ -350,3 +350,11 @@ std::string SM_CONFIG_CLI::make_bdr()
     }
     return ret;
 }
+
+void SM_CONFIG_CLI::clear()
+{
+    auto orig_node = common_cli::read_config_file();
+    orig_node["sm"]["init_state"] = "";
+    orig_node["sm"]["states"] = YAML::Load("[]");
+    common_cli::write_config_file(orig_node);
+}

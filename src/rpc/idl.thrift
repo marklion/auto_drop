@@ -48,7 +48,11 @@ service config_management{
 service driver_service{
     bool set_sm(1:u16 sm_port) throws (1:ad_gen_exp exp),
     oneway void stop_device(),
-    oneway void voice_broadcast(1:string voice_content),
+    oneway void voice_broadcast(1:string voice_content, 2:i32 times),
+    oneway void voice_stop(),
+    oneway void led_display(1:string led_content),
+    oneway void led_stop(),
+    oneway void gate_control(1:bool is_close),
     string get_trigger_vehicle_plate() throws (1:ad_gen_exp exp),
     vehicle_rd_detect_result vehicle_rd_detect() throws (1:ad_gen_exp exp),
     bool vehicle_passed_gate() throws (1:ad_gen_exp exp),

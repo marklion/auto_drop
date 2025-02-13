@@ -2,7 +2,7 @@ SHELL=/bin/bash
 SRC_DIR:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 SRC_DIR:=$(SRC_DIR)/src
 DELIVER_PATH=$(SRC_DIR)/../build
-SUB_DIR=sm public core rpc driver cli
+SUB_DIR=sm public core rpc driver cli conf
 BUILD_MODE=build
 OUTBOUND_DELIVER_PATH=$(DELIVER_PATH)
 export BUILD_MODE

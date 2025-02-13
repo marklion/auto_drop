@@ -8,6 +8,7 @@ class SM_CONFIG_CLI : public common_cli
 public:
     SM_CONFIG_CLI();
     virtual std::string make_bdr() override;
+    virtual void clear() override;
 };
 
 

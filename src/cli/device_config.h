@@ -7,6 +7,7 @@ class DEVICE_CONFIG_CLI : public common_cli
 public:
     DEVICE_CONFIG_CLI();
     std::string make_bdr() override;
+    virtual void clear();
 };
 
 #endif // _DEVICE_CONFIG_H_

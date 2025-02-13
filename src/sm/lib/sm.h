@@ -117,7 +117,7 @@ public:
     }
     void change_state(SM_STATE_PTR &_next_state)
     {
-        m_logger.log(AD_LOGGER::DEBUG, "change state from %s to %s", m_current_state->m_state_name.c_str(), _next_state->m_state_name.c_str());
+        m_logger.log( "切换状态 %s 到 %s", m_current_state->m_state_name.c_str(), _next_state->m_state_name.c_str());
         m_current_state->after_exit(*this);
         m_current_state = std::move(_next_state);
         m_current_state->before_enter(*this);
@@ -142,7 +142,7 @@ public:
     }
     void proc_event(const std::string &_event)
     {
-        m_logger.log(AD_LOGGER::DEBUG, "proc event %s", _event.c_str());
+        m_logger.log("处理事件 %s", _event.c_str());
         auto next = m_current_state->get_event_state(_event);
         if (next)
         {

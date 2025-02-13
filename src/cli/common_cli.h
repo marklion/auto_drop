@@ -17,8 +17,12 @@ public:
         menu->Insert("bdr", [this](std::ostream &_out) {
             _out << make_bdr() << std::endl;
         });
+        menu->Insert("clear", [this](std::ostream &_out) {
+            clear();
+        });
     }
     virtual std::string make_bdr() = 0;
+    virtual void clear() = 0;
     static YAML::Node read_config_file();
     static void write_config_file(const YAML::Node &node);
     static std::string check_params(const std::vector<std::string> &_params, uint32_t _index, const std::string &_prompt);

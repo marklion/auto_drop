@@ -170,49 +170,56 @@ static void mock(std::ostream &out, std::vector<std::string> _params)
     auto check_ret = common_cli::check_params(_params, 0, "设备名称");
     check_ret += common_cli::check_params(_params, 1, "动作");
     check_ret += common_cli::check_params(_params, 2, "动作效果");
-    auto dev_list = get_run_dev();
-    u16 port = 0;
-    for (const auto &dev : dev_list)
+    if (check_ret.empty())
     {
-        if (dev.device_name == _params[0])
+        auto dev_list = get_run_dev();
+        u16 port = 0;
+        for (const auto &dev : dev_list)
         {
-            port = dev.port;
-            break;
+            if (dev.device_name == _params[0])
+            {
+                port = dev.port;
+                break;
+            }
+        }
+        if (port > 0)
+        {
+            AD_RPC_SC::get_instance()->call_remote<driver_serviceClient>(
+                port,
+                "driver_service",
+                [&](driver_serviceClient &client)
+                {
+                    if (_params[1] == "sim_vehicle_came")
+                    {
+                        client.sim_vehicle_came(_params[2]);
+                        out << "模拟车辆到达" << std::endl;
+                    }
+                    else if (_params[1] == "sim_gate_status")
+                    {
+                        client.sim_gate_status(_params[2] == "close");
+                        out << "模拟闸机状态" << std::endl;
+                    }
+                    else if (_params[1] == "sim_scale_weight")
+                    {
+                        client.sim_scale_weight(std::stod(_params[2]));
+                        out << "模拟称重" << std::endl;
+                    }
+                    else if (_params[1] == "sim_vehicle_position")
+                    {
+                        client.sim_vehicle_position((vehicle_position_detect_state::type)std::stoi(_params[2]));
+                        out << "模拟车辆位置" << std::endl;
+                    }
+                    else if (_params[1] == "sim_vehicle_stuff")
+                    {
+                        client.sim_vehicle_stuff(_params[2] == "full");
+                        out << "模拟车辆满载" << std::endl;
+                    }
+                });
         }
     }
-    if (port > 0)
+    else
     {
-        AD_RPC_SC::get_instance()->call_remote<driver_serviceClient>(
-            port,
-            "driver_service",
-            [&](driver_serviceClient &client)
-            {
-                if (_params[1] == "sim_vehicle_came")
-                {
-                    client.sim_vehicle_came(_params[2]);
-                    out << "模拟车辆到达" << std::endl;
-                }
-                else if (_params[1] == "sim_gate_status")
-                {
-                    client.sim_gate_status(_params[2] == "close");
-                    out << "模拟闸机状态" << std::endl;
-                }
-                else if (_params[1] == "sim_scale_weight")
-                {
-                    client.sim_scale_weight(std::stod(_params[2]));
-                    out << "模拟称重" << std::endl;
-                }
-                else if (_params[1] == "sim_vehicle_position")
-                {
-                    client.sim_vehicle_position((vehicle_position_detect_state::type)std::stoi(_params[2]));
-                    out << "模拟车辆位置" << std::endl;
-                }
-                else if (_params[1] == "sim_vehicle_stuff")
-                {
-                    client.sim_vehicle_stuff(_params[2] == "full");
-                    out << "模拟车辆满载" << std::endl;
-                }
-            });
+        out << check_ret << std::endl;
     }
 }
 
@@ -388,4 +395,10 @@ std::string RUNTIME_CONFIG_CLI::make_bdr()
     }
     ret += "restart\n";
     return ret;
+}
+
+void RUNTIME_CONFIG_CLI::clear()
+{
+    g_log_config.clear();
+    g_log_open = false;
 }

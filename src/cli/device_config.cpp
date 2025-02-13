@@ -102,3 +102,11 @@ std::string DEVICE_CONFIG_CLI::make_bdr()
     }
     return ret;
 }
+
+void DEVICE_CONFIG_CLI::clear()
+{
+    auto node = common_cli::read_config_file();
+    auto devices = node["devices"];
+    devices = YAML::Load("[]");
+    common_cli::write_config_file(node);
+}

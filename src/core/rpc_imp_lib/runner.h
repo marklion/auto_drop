@@ -83,13 +83,44 @@ public:
     }
     std::shared_ptr<AD_EVENT_SC> m_event_sc = std::make_shared<AD_EVENT_SC>();
     AD_LOGGER m_logger = AD_LOGGER("runner");
-    void dev_voice_broadcast(const std::string &_dev_name, const std::string &_content)
+    void dev_voice_broadcast(const std::string &_dev_name, const std::string &_content, int times)
     {
-        m_logger.log("broadcast driver in");
         rpc_wrapper_call_device(
             get_device(_dev_name),
             [&](driver_serviceClient &client){
-                client.voice_broadcast(_content);
+                client.voice_broadcast(_content, times);
+            });
+    }
+    void dev_voice_stop(const std::string &_dev_name)
+    {
+        rpc_wrapper_call_device(
+            get_device(_dev_name),
+            [&](driver_serviceClient &client){
+                client.voice_stop();
+            });
+    }
+    void dev_led_display(const std::string &_dev_name, const std::string &_content)
+    {
+        rpc_wrapper_call_device(
+            get_device(_dev_name),
+            [&](driver_serviceClient &client){
+                client.led_display(_content);
+            });
+    }
+    void dev_led_stop(const std::string &_dev_name)
+    {
+        rpc_wrapper_call_device(
+            get_device(_dev_name),
+            [&](driver_serviceClient &client){
+                client.led_stop();
+            });
+    }
+    void dev_gate_control(const std::string &_dev_name, bool is_close)
+    {
+        rpc_wrapper_call_device(
+            get_device(_dev_name),
+            [&](driver_serviceClient &client){
+                client.gate_control(is_close);
             });
     }
     std::string dev_get_trigger_vehicle_plate(const std::string &_dev_name)

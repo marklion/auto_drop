@@ -251,7 +251,7 @@ namespace rang_implementation {
     template <typename T>
     inline enableStd<T> setColor(std::ostream &os, T const value)
     {
-        return os << "\033[" << static_cast<int>(value) << "m";
+        return os << "";
     }
 #endif
 
