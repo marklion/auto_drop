@@ -1,6 +1,7 @@
 #include "cli.h"
 #include "loopscheduler.h"
 #include "clilocalsession.h"
+#include "clifilesession.h"
 #include "../rpc/ad_rpc.h"
 #include "../rpc/gen_code/cpp/config_management.h"
 #include "sm_config.h"
@@ -18,16 +19,29 @@ int main(int argc, char const *argv[])
         root_menu->Insert(std::move(itr->menu));
     }
 
+    auto make_bdr_string = [&]()
+    {
+        std::string bdr_str;
+        for (auto &itr : sub_c)
+        {
+            bdr_str += itr->menu_name + "\n";
+            bdr_str += itr->make_bdr() + "\n";
+            bdr_str += "ad\n";
+        }
+        return bdr_str;
+    };
+
     root_menu->Insert(
         "bdr",
         [&](std::ostream &_out)
         {
-            for (auto &itr : sub_c)
-            {
-                _out << itr->menu_name << std::endl;
-                _out << itr->make_bdr() << std::endl;
-                _out << "ad" << std::endl;
-            }
+            _out << make_bdr_string();
+        });
+    root_menu->Insert(
+        "save",
+        [&](std::ostream &_out)
+        {
+            std::ofstream(AD_CONST_SAVED_CONFIG_FILE, std::ios::trunc) << make_bdr_string();
         });
     root_menu->Insert(
         "bash",
@@ -52,21 +66,43 @@ int main(int argc, char const *argv[])
         [&](std::ostream &out)
         {
             AD_RPC_SC::get_instance()->stop_server();
-            plsc->Stop();
+            if (plsc)
+            {
+                plsc->Stop();
+            }
         });
 
-    cli::LoopScheduler lsc;
-    cli::CliLocalTerminalSession ss(cli, lsc, std::cout);
-    plsc = &lsc;
     auto sc = AD_RPC_SC::get_instance();
-    auto cli_co = sc->add_co(
-        [&]()
-        {
-            lsc.Run(ss);
-        });
-    sc->resume_co(cli_co);
+    AD_CO_ROUTINE_PTR cli_co;
+    if (argc == 1)
+    {
+        cli::LoopScheduler lsc;
+        cli::CliLocalTerminalSession ss(cli, lsc, std::cout);
+        plsc = &lsc;
+        cli_co = sc->add_co(
+            [&]()
+            {
+                lsc.Run(ss);
+            });
 
-    sc->start_server();
+        sc->resume_co(cli_co);
+
+        sc->start_server();
+    }
+    else
+    {
+        std::fstream cmd_file(argv[1], std::ios::in);
+        cli::CliFileSession cf(cli, cmd_file);
+        cli_co = sc->add_co(
+            [&]()
+            {
+                cf.Start();
+            });
+
+        sc->resume_co(cli_co);
+
+        sc->start_server();
+    }
 
     return 0;
 }

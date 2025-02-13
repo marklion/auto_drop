@@ -8,6 +8,8 @@
 #include <sys/timerfd.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <sys/wait.h>
+#include <sys/syscall.h>
 #include "ad_event_sc.h"
 
 AD_EVENT_SC::AD_EVENT_SC() : m_logger("EVENT_SC")
@@ -201,7 +203,32 @@ void AD_EVENT_SC::handleEvent()
     }
 }
 
-AD_EVENT_SC_TIMER_NODE::AD_EVENT_SC_TIMER_NODE(int _timeout, std::function<void()> _callback) : m_callback(_callback), m_timeout(_timeout), m_logger( "TIMER")
+void AD_EVENT_SC::non_block_system(const std::string &_cmd)
+{
+    auto pid = fork();
+    if (pid == 0)
+    {
+        execl("/bin/bash", "/bin/bash", "-c", _cmd.c_str(), nullptr);
+        exit(0);
+    }
+    else
+    {
+        auto fd = syscall(SYS_pidfd_open, pid, 0);
+        if (fd >= 0)
+        {
+            yield_by_fd(fd);
+            int status;
+            waitpid(pid, &status, 0);
+            close(fd);
+        }
+        else
+        {
+            m_logger.log(AD_LOGGER::ERROR, "Failed to open pidfd:%s", strerror(errno));
+        }
+    }
+}
+
+AD_EVENT_SC_TIMER_NODE::AD_EVENT_SC_TIMER_NODE(int _timeout, std::function<void()> _callback) : m_callback(_callback), m_timeout(_timeout), m_logger("TIMER")
 {
     auto fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
     if (fd >= 0)
@@ -248,7 +275,7 @@ void AD_EVENT_SC_TIMER_NODE::handleEvent()
     }
 }
 
-AD_EVENT_SC_TCP_DATA_NODE::AD_EVENT_SC_TCP_DATA_NODE(int _fd, AD_EVENT_SC_TCP_LISTEN_NODE_PTR _listen_node) : m_fd(_fd), m_listen_node(_listen_node), m_logger( "TCP_DATA" + std::to_string(_fd))
+AD_EVENT_SC_TCP_DATA_NODE::AD_EVENT_SC_TCP_DATA_NODE(int _fd, AD_EVENT_SC_TCP_LISTEN_NODE_PTR _listen_node) : m_fd(_fd), m_listen_node(_listen_node), m_logger("TCP_DATA" + std::to_string(_fd))
 {
 }
 
@@ -282,9 +309,9 @@ void AD_EVENT_SC_TCP_DATA_NODE::handleEvent()
 AD_EVENT_SC_TCP_LISTEN_NODE::AD_EVENT_SC_TCP_LISTEN_NODE(
     unsigned short _port,
     CREATE_DATA_FUNC _create_data_func,
-    AD_EVENT_SC_PTR _event_sc) : m_logger( "TCP_LISTEN" + std::to_string(_port)),
+    AD_EVENT_SC_PTR _event_sc) : m_logger("TCP_LISTEN" + std::to_string(_port)),
                                  m_create_data_func(_create_data_func),
-                                 m_event_sc(_event_sc),m_port(_port)
+                                 m_event_sc(_event_sc), m_port(_port)
 {
     auto listen_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (listen_fd >= 0)

@@ -140,6 +140,7 @@ public:
         m_co_routines.push_back(co);
         return co;
     }
+    void non_block_system(const std::string &_cmd);
 
 private:
     int m_epollFd = -1;                                       // epoll 文件描述符

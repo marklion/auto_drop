@@ -386,5 +386,6 @@ std::string RUNTIME_CONFIG_CLI::make_bdr()
     {
         ret += "enable_log " + itr.log_module + " " + itr.log_level + "\n";
     }
+    ret += "restart\n";
     return ret;
 }
