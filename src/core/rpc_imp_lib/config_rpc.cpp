@@ -52,43 +52,65 @@ public:
     {
         return m_fd;
     }
+    int getPid() const
+    {
+        return m_pid;
+    }
     virtual void handleEvent() override
     {
         int status;
+        AD_RPC_SC::get_instance()->unregisterNode(shared_from_this());
         waitpid(m_pid, &status, WNOHANG);
         if (!WIFEXITED(status))
         {
             m_logger.log(AD_LOGGER::ERROR, "subprocess %s exit with code %d", m_name.c_str(), WEXITSTATUS(status));
-            AD_RPC_SC::get_instance()->registerNode(std::make_shared<SUBPROCESS_EVENT_SC_NODE>(m_path, m_argv, m_name, create_sub_process(m_path, m_argv)));
+            auto new_pid  = create_sub_process(m_path, m_argv);
+            close(m_fd);
+            m_fd = syscall(SYS_pidfd_open, new_pid, 0);
+            AD_RPC_SC::get_instance()->registerNode(shared_from_this());
         }
-        AD_RPC_SC::get_instance()->unregisterNode(shared_from_this());
     }
 };
 
-u16 config_management_impl::start_daemon(const std::string &_path, const std::vector<std::string> &_argv, const std::string &_name)
+std::pair<u16, SUBPROCESS_EVENT_SC_NODE_PTR> config_management_impl::start_daemon(const std::string &_path, const std::vector<std::string> &_argv, const std::string &_name)
 {
     u16 min_port = AD_CONST_DAEMON_MIN_PORT;
     u16 max_port = AD_CONST_DAEMON_MAX_PORT;
-    u16 ret = 0;
+    std::pair<u16, SUBPROCESS_EVENT_SC_NODE_PTR> ret;
+    ret.first = 0;
     for (u16 port = min_port; port < max_port; port++)
     {
         if (m_device_map.find(port) == m_device_map.end() && m_sm_map.find(port) == m_sm_map.end())
         {
-            ret = port;
+            ret.first = port;
             break;
         }
     }
     auto exec_args = _argv;
-    exec_args.insert(exec_args.begin(), std::to_string(ret));
+    exec_args.insert(exec_args.begin(), std::to_string(ret.first));
     exec_args.insert(exec_args.begin(), _name);
 
     auto args_size = exec_args.size();
     auto pid = create_sub_process(_path, exec_args);
     if (pid > 0)
     {
-        AD_RPC_SC::get_instance()->registerNode(std::make_shared<SUBPROCESS_EVENT_SC_NODE>(_path, exec_args, _name, pid));
+        ret.second = std::make_shared<SUBPROCESS_EVENT_SC_NODE>(_path, exec_args, _name, pid);
+        AD_RPC_SC::get_instance()->registerNode(ret.second);
     }
     return ret;
+}
+
+void config_management_impl::wait_stop_daemon(const u16 port)
+{
+    if (m_subprocess_map.find(port) != m_subprocess_map.end())
+    {
+        auto node = m_subprocess_map[port];
+        int status;
+        AD_RPC_SC::get_instance()->unregisterNode(node);
+        AD_RPC_SC::get_instance()->yield_by_fd(node->getFd());
+        waitpid(node->getPid(), &status, WNOHANG);
+        m_subprocess_map.erase(port);
+    }
 }
 
 void config_management_impl::start_device(device_config &_return, const std::string &driver_name, const std::vector<std::string> &argv, const std::string &device_name)
@@ -97,10 +119,12 @@ void config_management_impl::start_device(device_config &_return, const std::str
     tmp.device_name = device_name;
     tmp.driver_name = driver_name;
     tmp.argv = argv;
-    tmp.port = start_daemon(driver_name, argv, device_name);
+    auto run_info = start_daemon(driver_name, argv, device_name);
+    tmp.port = run_info.first;
     if (tmp.port > 0)
     {
         m_device_map[tmp.port] = tmp;
+        m_subprocess_map[tmp.port] = run_info.second;
         _return = tmp;
     }
     else
@@ -117,6 +141,7 @@ void config_management_impl::stop_device(const u16 port)
         rpc_wrapper_call_device(
             port, [&](driver_serviceClient &client)
             { client.stop_device(); });
+        wait_stop_daemon(port);
     }
 }
 
@@ -133,10 +158,12 @@ void config_management_impl::start_sm(sm_config &_return, const std::string &sm_
     sm_config tmp;
     tmp.sm_name = sm_name;
     tmp.argv = argv;
-    tmp.port = start_daemon("sm_daemon", argv, sm_name);
+    auto run_info = start_daemon("sm_daemon", argv, sm_name);
+    tmp.port = run_info.first;
     if (tmp.port > 0)
     {
         m_sm_map[tmp.port] = tmp;
+        m_subprocess_map[tmp.port] = run_info.second;
         _return = tmp;
     }
     else
@@ -157,6 +184,7 @@ void config_management_impl::stop_sm(const u16 port)
             {
                 client.stop_sm();
             });
+        wait_stop_daemon(port);
     }
 }
 

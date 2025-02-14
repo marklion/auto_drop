@@ -111,6 +111,7 @@ class AD_RPC_SC : public AD_EVENT_SC
     std::shared_ptr<AD_RPC_EVENT_NODE> m_rpc_listen_node;
     using AD_EVENT_SC::AD_EVENT_SC;
     static std::shared_ptr<AD_RPC_SC> m_single;
+    AD_LOGGER m_logger = AD_LOGGER("rpc");
 public:
     static std::shared_ptr<AD_RPC_SC> get_instance()
     {
@@ -129,9 +130,16 @@ public:
         auto client_protocol = std::make_shared<apache::thrift::protocol::TBinaryProtocol>(client_ad_trans);
         auto mt_protocol = std::make_shared<apache::thrift::protocol::TMultiplexedProtocol>(client_protocol, _service);
         TH client(mt_protocol);
-        client_buffer_trans->open();
-        _func(client);
-        client_buffer_trans->close();
+        try
+        {
+            client_buffer_trans->open();
+            _func(client);
+            client_buffer_trans->close();
+        }
+        catch (const std::exception &e)
+        {
+            m_logger.log(AD_LOGGER::ERROR, "call_remote error:%s", e.what());
+        }
     }
     void enable_rpc_server(unsigned short _port)
     {
@@ -174,7 +182,6 @@ public:
         }
         return 0;
     }
-
 };
 
 #endif // _AD_RPC_H_

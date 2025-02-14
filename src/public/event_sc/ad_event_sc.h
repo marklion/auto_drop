@@ -50,7 +50,6 @@ public:
 
 private:
     ACR_STATE m_state = ACR_STATE_READY;
-    AD_LOGGER m_logger;
     static ucontext_t m_global_context;
 public:
     ucontext_t m_context = {0};
@@ -59,14 +58,9 @@ public:
     AD_CO_ROUTINE(AD_CO_ROUTINE_FUNC _func, ucontext_t *_main_co);
     ~AD_CO_ROUTINE()
     {
-        m_logger.log(AD_LOGGER::DEBUG, "co was destroyed");
     }
     void set_co_state(ACR_STATE _state)
     {
-        if (_state == ACR_STATE_READY)
-        {
-            m_logger.log(AD_LOGGER::DEBUG, "co was re-active");
-        }
         m_state = _state;
     }
     ACR_STATE get_co_state()
@@ -75,17 +69,13 @@ public:
     }
     void resume(ucontext_t *_main_co)
     {
-        m_logger.log(AD_LOGGER::DEBUG, "resume co");
         set_co_state(ACR_STATE_RUNNING);
         swapcontext(_main_co, &m_context);
-        m_logger.log(AD_LOGGER::DEBUG, "back to main co because co state is %d", m_state);
     }
     void yield(ucontext_t *_main_co)
     {
-        m_logger.log(AD_LOGGER::DEBUG, "yield co");
         set_co_state(ACR_STATE_SUSPEND);
         swapcontext(&m_context, _main_co);
-        m_logger.log(AD_LOGGER::DEBUG, "back to co");
     }
     static void co_run(std::function<void()> _main_func);
 };

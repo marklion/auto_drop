@@ -36,26 +36,6 @@ static std::vector<sm_config> get_run_sm()
     return sm_list;
 }
 
-static void match_all_device()
-{
-    auto sm_list = get_run_sm();
-    if (sm_list.size() == 1)
-    {
-        auto sm = sm_list[0];
-        auto dev_list = get_run_dev();
-        for (auto &dev : dev_list)
-        {
-            AD_RPC_SC::get_instance()->call_remote<runner_smClient>(
-                sm.port,
-                "runner_sm",
-                [&](runner_smClient &client)
-                {
-                    client.match_device(dev.device_name, dev.port);
-                });
-        }
-    }
-}
-
 static void restart(std::ostream &out, std::vector<std::string> _params)
 {
     auto dev_list = get_run_dev();
@@ -80,28 +60,12 @@ static void restart(std::ostream &out, std::vector<std::string> _params)
                 client.stop_sm(sm.port);
             });
     }
-    AD_RPC_SC::get_instance()->yield_by_timer(2);
     auto config = common_cli::read_config_file();
     if (!config.IsNull())
     {
         auto devices = config["devices"];
         auto sm = config["sm"];
-        if (!sm.IsNull() && sm["init_state"].as<std::string>("") != "")
-        {
-            sm_config sm_ret;
-            AD_RPC_SC::get_instance()->call_remote<config_managementClient>(
-                AD_CONST_CONFIG_LISTEN_PORT,
-                "config_management",
-                [&](config_managementClient &client)
-                {
-                    client.start_sm(sm_ret, "sm", {AD_CONST_CONFIG_FILE});
-                });
-            if (sm_ret.port <= 0)
-            {
-                out << "启动sm失败" << std::endl;
-                return;
-            }
-        }
+
         for (const auto &itr : devices)
         {
             device_config dev_ret;
@@ -136,8 +100,22 @@ static void restart(std::ostream &out, std::vector<std::string> _params)
                 return;
             }
         }
-        AD_RPC_SC::get_instance()->yield_by_timer(2);
-        match_all_device();
+        if (!sm.IsNull() && sm["init_state"].as<std::string>("") != "")
+        {
+            sm_config sm_ret;
+            AD_RPC_SC::get_instance()->call_remote<config_managementClient>(
+                AD_CONST_CONFIG_LISTEN_PORT,
+                "config_management",
+                [&](config_managementClient &client)
+                {
+                    client.start_sm(sm_ret, "sm", {AD_CONST_CONFIG_FILE});
+                });
+            if (sm_ret.port <= 0)
+            {
+                out << "启动sm失败" << std::endl;
+                return;
+            }
+        }
     }
 }
 

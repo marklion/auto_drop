@@ -78,12 +78,12 @@ void common_driver::sim_scale_weight(const double weight)
 
 void common_driver::sim_vehicle_position(const vehicle_position_detect_state::type state)
 {
-    m_vehicle_position = state;
+    m_rd_result.state = state;
 }
 
 void common_driver::sim_vehicle_stuff(const bool is_full)
 {
-    m_is_full = is_full;
+    m_rd_result.is_full = is_full;
 }
 
 bool common_driver::vehicle_passed_gate()

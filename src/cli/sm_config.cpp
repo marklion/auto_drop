@@ -1,5 +1,40 @@
 #include "sm_config.h"
 #include "../core/rpc_imp_lib/sm_rpc.h"
+static std::string make_comment()
+{
+    return "--[[\n"
+            "环境提供的函数说明：\n"
+            "sm:start_timer(sec,func),启动一个定时器，sec为秒数，func为定时器到时时执行的函数.返回一个定时器变量\n"
+            "sm:stop_timer(timer),停止一个定时器，timer为定时器变量\n"
+            "sm:dev_voice_broadcast(device, content, times),播放语音，device为喇叭设备名称，content为语音内容字符串，times为播放次数，-1代表一直播放\n"
+            "sm:dev_voice_stop(device),停止播放语音，device为喇叭设备名称\n"
+            "sm:dev_led_display(device, content),显示LED内容，device为LED设备名称，content为显示内容字符串\n"
+            "sm:dev_led_stop(device),停止显示LED内容，device为LED设备名称\n"
+            "sm:dev_gate_control(device, is_close),控制闸机，device为闸机设备名称，is_close为true时关闭闸机，false时打开闸机\n"
+            "sm:dev_get_trigger_vehicle_plate(device),获取触发车牌，device为车牌识别设备名称，返回车牌字符串\n"
+            "sm:dev_vehicle_rd_detect(device),车辆雷达检测结果检测，device为检测设备名称，返回车辆检测结果,其中:state是车辆位置 可能是0123分别代表开始、中间、结束、无效，:is_full代表是否装满 \n"
+            "sm:dev_vehicle_passed_gate(device),车辆通过闸机，device为闸机设备名称, 返回是否通过\n"
+            "sm:proc_event(event_name), 触发事件，event_name为事件名称\n"
+            "print_log(log),打印日志，log为日志内容\n"
+            "举例：\n"
+            "sm:dev_voice_broadcast(\"some_device\",\"hello\",1)\n"
+            "sm:dev_led_display(\"some_device\",\"hello\")\n"
+            "sm:dev_gate_control(\"some_device\",false)\n"
+            "some_timer = sm:start_timer(1,function() \n"
+            "\tdetect_result = sm:dev_vehicle_rd_detect(\"some_device\") \n"
+            "\tif (sm:dev_vehicle_passed_gate(\"some_device\") and detect_result:is_full) then\n"
+            "\t\tsm:dev_voice_stop(\"some_device\") \n"
+            "\t\tsm:dev_led_stop(\"some_device\") \n"
+            "\t\tsm:stop_timer(some_timer) \n"
+            "\t\tsm:proc_event(\"some_event\") \n"
+            "\tend)\n"
+            "end)\n"
+            "这段代码表示：\n"
+            "让设备some_device播放hello语音一次，显示hello内容，打开闸机\n"
+            "打开定时器，每1秒获取一次车辆雷达检测结果和车辆是否通过，\n"
+            "如果车辆通过闸机并且车辆装满，则停止播放语音，停止显示内容，停止定时器，触发事件some_event\n"
+            "--]]\n";
+}
 static YAML::Node get_state_from_sm(YAML::Node _sm, const std::string &_state_name)
 {
     auto states = _sm["states"];
@@ -27,11 +62,13 @@ static YAML::Node make_new_state(const std::string &_name)
 static std::string edit_by_vim(const std::string &_orig_code)
 {
     std::string ret;
-    std::string tmp_file = "/tmp/sm_config_edit_XXXXXX";
+    std::string tmp_file = "/tmp/sm_config_edit_XXXXXX.lua";
     std::ofstream fout(tmp_file);
+    auto comment = make_comment();
+    fout << comment;
     fout << _orig_code;
     fout.close();
-    system(("vim " + tmp_file).c_str());
+    system(("bash -c 'vim " + tmp_file + "'").c_str());
     auto pfile = popen(("cat " + tmp_file).c_str(), "r");
     if (pfile)
     {
@@ -41,6 +78,11 @@ static std::string edit_by_vim(const std::string &_orig_code)
             ret += buffer;
         }
         pclose(pfile);
+    }
+    auto comment_pos = ret.find(make_comment());
+    if (comment_pos != std::string::npos)
+    {
+        ret.erase(comment_pos, make_comment().length());
     }
     return ret;
 }
@@ -182,7 +224,8 @@ static std::string change_state_action(const std::string &_state_name, const std
         }
         else
         {
-            auto lua_check_ret = check_lua_code(_lua_code);
+            auto lua_code = _lua_code;
+            auto lua_check_ret = check_lua_code(lua_code);
             if (!lua_check_ret.empty())
             {
                 ret += lua_check_ret + "\n";
@@ -191,11 +234,11 @@ static std::string change_state_action(const std::string &_state_name, const std
             {
                 if (_action_type == "do")
                 {
-                    sm_state_config["do"]["action"] = _lua_code;
+                    sm_state_config["do"]["action"] = lua_code;
                 }
                 else
                 {
-                    sm_state_config[_action_type] = _lua_code;
+                    sm_state_config[_action_type] = lua_code;
                 }
                 common_cli::write_config_file(orig_node);
             }
@@ -226,6 +269,7 @@ static void input_action(std::ostream &out, std::vector<std::string> _params)
         out << check_ret << std::endl;
     }
 }
+
 static void edit_action(std::ostream &out, std::vector<std::string> _params)
 {
     auto check_ret = common_cli::check_params(_params, 0, "状态名称");

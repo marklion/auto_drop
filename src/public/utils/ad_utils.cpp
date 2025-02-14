@@ -46,5 +46,6 @@ void AD_LOGGER::output_log(const std::string &_content)
         symlink(log_file.c_str(), symlink_path.c_str());
     }
     std::ofstream ofs(symlink_path, std::ios::app);
-    ofs << _content << std::endl;
+    auto self_pid = getpid();
+    ofs << "[" << self_pid << "]" << _content << std::endl;
 }

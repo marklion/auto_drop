@@ -22,7 +22,7 @@ get_docker_image() {
 
 start_all_server() {
     line=`wc -l $0|awk '{print $1}'`
-    line=`expr $line - 83`
+    line=`expr $line - 85`
     mkdir /tmp/sys_mt
     tail -n $line $0 | tar zx  -C /tmp/sys_mt/
     rsync -aK /tmp/sys_mt/ /
@@ -32,6 +32,8 @@ start_all_server() {
     ulimit -q 819200000
     echo 'export LANG=zh_CN.UTF-8' >> ~/.bashrc
     echo 'export LC_ALL=zh_CN.UTF-8' >> ~/.bashrc
+    export LANG=zh_CN.UTF-8
+    export LC_ALL=zh_CN.UTF-8
     nginx -c /conf/nginx.conf
     wetty -c /bin/ad_cli &
     core_daemon

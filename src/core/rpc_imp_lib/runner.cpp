@@ -1,5 +1,10 @@
 #include "runner.h"
 
+static void print_log(const std::string &_log)
+{
+    AD_LOGGER("LUA").log(AD_LOGGER::INFO, _log);
+}
+
 void RUNNER::register_lua_function_virt(lua_State *_L)
 {
     luabridge::getGlobalNamespace(_L)
@@ -18,14 +23,20 @@ void RUNNER::register_lua_function_virt(lua_State *_L)
         .beginClass<AD_EVENT_SC_TIMER_NODE_PTR>("AD_EVENT_SC_TIMER_NODE_PTR")
         .endClass()
         .beginClass<vehicle_rd_detect_result>("vehicle_rd_detect_result")
-        .endClass();
+        .addProperty("state", &vehicle_rd_detect_result::state)
+        .addProperty("is_full", &vehicle_rd_detect_result::is_full)
+        .endClass()
+        .addFunction("print_log_string", &print_log);
+    luaL_dostring(
+        _L, "function print_log(log)\n"
+            "\tprint_log_string(tostring(log))\n"
+            "end\n");
 }
 
 std::shared_ptr<RUNNER> RUNNER::runner_init(const YAML::Node &_sm_config)
 {
     auto sm_state_fac = SM_STATE_FACTORY_PTR(new SM_STATE_FACTORY(_sm_config));
     auto ret = std::make_shared<RUNNER>(sm_state_fac->m_init_state, sm_state_fac);
-    ret->begin<RUNNER>();
 
     return ret;
 }

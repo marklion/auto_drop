@@ -386,7 +386,7 @@ static void co_routine_func(AD_CO_ROUTINE *_co)
     _co->set_co_state(AD_CO_ROUTINE::ACR_STATE_DEAD);
 }
 static long g_co_id = 0;
-AD_CO_ROUTINE::AD_CO_ROUTINE(AD_CO_ROUTINE_FUNC _func, ucontext_t *_main_co) : m_func(_func), m_logger("CO_ROUTINE" + std::to_string(g_co_id))
+AD_CO_ROUTINE::AD_CO_ROUTINE(AD_CO_ROUTINE_FUNC _func, ucontext_t *_main_co) : m_func(_func)
 {
     getcontext(&m_context);
     m_context.uc_stack.ss_sp = m_stacks;
@@ -395,7 +395,6 @@ AD_CO_ROUTINE::AD_CO_ROUTINE(AD_CO_ROUTINE_FUNC _func, ucontext_t *_main_co) : m
     makecontext(&m_context, (void (*)())co_routine_func, 1, this);
     g_co_id++;
     g_co_id %= 1024;
-    m_logger.log(AD_LOGGER::DEBUG, "Create co");
 }
 
 ucontext_t AD_CO_ROUTINE::m_global_context;

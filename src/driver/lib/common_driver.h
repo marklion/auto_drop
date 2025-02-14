@@ -11,8 +11,6 @@ class common_driver : public driver_serviceIf, public std::enable_shared_from_th
     vehicle_rd_detect_result m_rd_result;
     bool m_gate_is_close = false;
     double m_current_weight = 0;
-    vehicle_position_detect_state::type m_vehicle_position = vehicle_position_detect_state::vehicle_postion_out;
-    bool m_is_full = false;
 protected:
     AD_LOGGER m_logger;
     u16 m_sm_port = 0;
