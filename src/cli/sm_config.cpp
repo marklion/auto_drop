@@ -2,38 +2,15 @@
 #include "../core/rpc_imp_lib/sm_rpc.h"
 static std::string make_comment()
 {
-    return "--[[\n"
-            "环境提供的函数说明：\n"
-            "sm:start_timer(sec,func),启动一个定时器，sec为秒数，func为定时器到时时执行的函数.返回一个定时器变量\n"
-            "sm:stop_timer(timer),停止一个定时器，timer为定时器变量\n"
-            "sm:dev_voice_broadcast(device, content, times),播放语音，device为喇叭设备名称，content为语音内容字符串，times为播放次数，-1代表一直播放\n"
-            "sm:dev_voice_stop(device),停止播放语音，device为喇叭设备名称\n"
-            "sm:dev_led_display(device, content),显示LED内容，device为LED设备名称，content为显示内容字符串\n"
-            "sm:dev_led_stop(device),停止显示LED内容，device为LED设备名称\n"
-            "sm:dev_gate_control(device, is_close),控制闸机，device为闸机设备名称，is_close为true时关闭闸机，false时打开闸机\n"
-            "sm:dev_get_trigger_vehicle_plate(device),获取触发车牌，device为车牌识别设备名称，返回车牌字符串\n"
-            "sm:dev_vehicle_rd_detect(device),车辆雷达检测结果检测，device为检测设备名称，返回车辆检测结果,其中:state是车辆位置 可能是0123分别代表开始、中间、结束、无效，:is_full代表是否装满 \n"
-            "sm:dev_vehicle_passed_gate(device),车辆通过闸机，device为闸机设备名称, 返回是否通过\n"
-            "sm:proc_event(event_name), 触发事件，event_name为事件名称\n"
-            "print_log(log),打印日志，log为日志内容\n"
-            "举例：\n"
-            "sm:dev_voice_broadcast(\"some_device\",\"hello\",1)\n"
-            "sm:dev_led_display(\"some_device\",\"hello\")\n"
-            "sm:dev_gate_control(\"some_device\",false)\n"
-            "some_timer = sm:start_timer(1,function() \n"
-            "\tdetect_result = sm:dev_vehicle_rd_detect(\"some_device\") \n"
-            "\tif (sm:dev_vehicle_passed_gate(\"some_device\") and detect_result:is_full) then\n"
-            "\t\tsm:dev_voice_stop(\"some_device\") \n"
-            "\t\tsm:dev_led_stop(\"some_device\") \n"
-            "\t\tsm:stop_timer(some_timer) \n"
-            "\t\tsm:proc_event(\"some_event\") \n"
-            "\tend)\n"
-            "end)\n"
-            "这段代码表示：\n"
-            "让设备some_device播放hello语音一次，显示hello内容，打开闸机\n"
-            "打开定时器，每1秒获取一次车辆雷达检测结果和车辆是否通过，\n"
-            "如果车辆通过闸机并且车辆装满，则停止播放语音，停止显示内容，停止定时器，触发事件some_event\n"
-            "--]]\n";
+    std::string ret;
+    std::ifstream fin(AD_CONST_LUA_SAMPLE_FILE);
+    if (fin)
+    {
+        std::stringstream buffer;
+        buffer << fin.rdbuf();
+        ret = buffer.str();
+    }
+    return ret;
 }
 static YAML::Node get_state_from_sm(YAML::Node _sm, const std::string &_state_name)
 {
@@ -59,7 +36,7 @@ static YAML::Node make_new_state(const std::string &_name)
     new_state["events"] = YAML::Load("[]");
     return new_state;
 }
-static std::string edit_by_vim(const std::string &_orig_code)
+static std::string edit_by_editor(const std::string &_orig_code, const std::string &_tool_name = "ne")
 {
     std::string ret;
     std::string tmp_file = "/tmp/sm_config_edit_XXXXXX.lua";
@@ -68,7 +45,7 @@ static std::string edit_by_vim(const std::string &_orig_code)
     fout << comment;
     fout << _orig_code;
     fout.close();
-    system(("bash -c 'vim " + tmp_file + "'").c_str());
+    system(("bash -c '" + _tool_name + " " + tmp_file + "'").c_str());
     auto pfile = popen(("cat " + tmp_file).c_str(), "r");
     if (pfile)
     {
@@ -182,15 +159,15 @@ static std::string get_current_action(const std::string &_state_name, const std:
     }
     return ret;
 }
-static std::string check_lua_code(const std::string &_code)
+static std::string check_lua_code(const std::string &_code, bool _is_real_run = false)
 {
     std::string ret;
     try
     {
         runner_sm_impl tmp_sm_rpc(nullptr);
-        tmp_sm_rpc.check_lua_code(_code);
+        tmp_sm_rpc.check_lua_code(_code, _is_real_run);
     }
-    catch(const ad_gen_exp& e)
+    catch (const ad_gen_exp &e)
     {
         ret = e.msg;
     }
@@ -276,7 +253,12 @@ static void edit_action(std::ostream &out, std::vector<std::string> _params)
     check_ret += common_cli::check_params(_params, 1, "动作类型");
     if (check_ret.empty())
     {
-        auto lua_code = edit_by_vim(get_current_action(_params[0], _params[1]));
+        std::string tool_name = "ne";
+        if (_params.size() >= 3)
+        {
+            tool_name = _params[2];
+        }
+        auto lua_code = edit_by_editor(get_current_action(_params[0], _params[1]), tool_name);
         auto ret = change_state_action(_params[0], _params[1], lua_code);
         out << ret << std::endl;
     }
@@ -313,15 +295,37 @@ static void create_state(std::ostream &out, std::vector<std::string> _params)
     }
 }
 
+static void test_lua(std::ostream &out, std::vector<std::string> _params)
+{
+    auto check_ret = common_cli::check_params(_params, 0, "状态名称");
+    check_ret += common_cli::check_params(_params, 1, "动作类型");
+    if (check_ret.empty())
+    {
+        auto lua_code = get_current_action(_params[0], _params[1]);
+        AD_LOGGER::set_global_log_level(AD_LOGGER::DEBUG);
+        auto lua_ret = check_lua_code(lua_code, true);
+        if (lua_ret.length() > 0)
+        {
+            out << lua_ret << std::endl;
+        }
+        AD_LOGGER::set_global_log_level(AD_LOGGER::ERROR);
+    }
+    else
+    {
+        out << check_ret << std::endl;
+    }
+}
+
 static std::unique_ptr<cli::Menu> make_sm_menue()
 {
     std::unique_ptr<cli::Menu> sm_menu(new cli::Menu("state_machine"));
     sm_menu->Insert(CLI_MENU_ITEM(create_state), "创建状态", {"状态名称"});
-    sm_menu->Insert(CLI_MENU_ITEM(edit_action), "编辑动作", {"状态名称", "动作类型"});
+    sm_menu->Insert(CLI_MENU_ITEM(edit_action), "编辑动作", {"状态名称", "动作类型", "编辑器,默认ne"});
     sm_menu->Insert(CLI_MENU_ITEM(input_action), "输入动作", {"状态名称", "动作类型", "Lua代码"});
     sm_menu->Insert(CLI_MENU_ITEM(set_next), "设定下一个状态", {"状态名称", "下一个状态"});
     sm_menu->Insert(CLI_MENU_ITEM(add_event), "添加事件", {"状态名称", "事件名称", "目标状态"});
     sm_menu->Insert(CLI_MENU_ITEM(set_init), "指定初始状态", {"状态名称"});
+    sm_menu->Insert(CLI_MENU_ITEM(test_lua), "测试Lua", {"状态名称", "动作类型"});
     return sm_menu;
 }
 

@@ -171,6 +171,7 @@ public:
         }
     }
 
+    luabridge::LuaRef call_http_api(const std::string &_url, const std::string &_method, luabridge::LuaRef _body, luabridge::LuaRef _header);
 
     static std::shared_ptr<RUNNER> runner_init(const YAML::Node &_sm_config);
     virtual ~RUNNER()

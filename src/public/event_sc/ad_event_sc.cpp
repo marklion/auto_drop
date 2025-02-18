@@ -176,7 +176,7 @@ void AD_EVENT_SC::handleEvent()
             break;
         }
     }
-    const int MAX_EVENTS = 10;
+    const int MAX_EVENTS = 1;
     struct epoll_event events[MAX_EVENTS] = {0};
     if (m_fdToNode.size() == 0)
     {
@@ -263,11 +263,8 @@ void AD_EVENT_SC_TIMER_NODE::handleEvent()
     auto read_len = read(m_timer_fd, &exp, sizeof(exp));
     if (read_len == sizeof(exp))
     {
-        for (int i = 0; i < exp; ++i)
-        {
-            m_logger.log(AD_LOGGER::DEBUG, "%ds timer fd:%d expired", m_timeout, m_timer_fd);
-            m_callback();
-        }
+        m_logger.log(AD_LOGGER::DEBUG, "%ds timer fd:%d expired", m_timeout, m_timer_fd);
+        m_callback();
     }
     else
     {

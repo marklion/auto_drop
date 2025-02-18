@@ -21,7 +21,8 @@ public:
     virtual bool match_device(const std::string &use_for, const u16 port) override;
     virtual bool clear_device(const std::string &use_for) override;
     virtual void stop_sm() override;
-    virtual bool check_lua_code(const std::string &code) override;
+    virtual bool check_lua_code(const std::string &code, const bool is_real_run) override;
+    virtual void reset_sm() override;
 };
 
 #endif // _SM_RPC_H_

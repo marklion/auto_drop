@@ -53,12 +53,15 @@ void runner_sm_impl::stop_sm()
     AD_RPC_SC::get_instance()->stop_server();
 }
 
-bool runner_sm_impl::check_lua_code(const std::string &code)
+bool runner_sm_impl::check_lua_code(const std::string &code, const bool is_real_run)
 {
     bool ret = false;
 
     auto p_tmp_runner = RUNNER::runner_init(YAML::LoadFile("/conf/sample.yaml")["sm"]);
-    auto check_ret = p_tmp_runner->check_lua_code(code);
+    luaL_openlibs(p_tmp_runner->m_L);
+    p_tmp_runner->register_lua_function();
+    luabridge::setGlobal(p_tmp_runner->m_L, (RUNNER *)(p_tmp_runner.get()), "sm");
+    auto check_ret = p_tmp_runner->check_lua_code(code, is_real_run);
     if (check_ret.empty())
     {
         ret = true;
@@ -71,4 +74,9 @@ bool runner_sm_impl::check_lua_code(const std::string &code)
     }
 
     return ret;
+}
+
+void runner_sm_impl::reset_sm()
+{
+    m_runner->proc_event(AD_CONST_SM_EVENT_RESET);
 }

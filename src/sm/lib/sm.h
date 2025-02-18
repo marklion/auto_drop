@@ -93,9 +93,9 @@ public:
 class DYNAMIC_SM
 {
     AD_LOGGER m_logger = AD_LOGGER("sm");
-    lua_State *m_L = luaL_newstate();
 
 public:
+    lua_State *m_L = luaL_newstate();
     SM_STATE_PTR m_current_state;
 
     DYNAMIC_SM(const std::string &_init_state, SM_STATE_FACTORY_PTR _sm_state_factory)
@@ -150,13 +150,24 @@ public:
             trigger();
         }
     }
-    std::string check_lua_code(const std::string &_code)
+    std::string check_lua_code(const std::string &_code, bool _is_real_run = false)
     {
         std::string ret;
         auto lua_ret = luaL_loadstring(m_L, _code.c_str());
         if (lua_ret != LUA_OK)
         {
             ret = lua_tostring(m_L, -1);
+        }
+        else
+        {
+            if (_is_real_run)
+            {
+                lua_ret = lua_pcall(m_L, 0, LUA_MULTRET, 0);
+                if (lua_ret != LUA_OK)
+                {
+                    ret = lua_tostring(m_L, -1);
+                }
+            }
         }
         return ret;
     }

@@ -59,16 +59,11 @@ void common_driver::vehicle_rd_detect(vehicle_rd_detect_result &_return)
 void common_driver::sim_vehicle_came(const std::string &plate)
 {
     m_latest_plate = plate;
-    emit_event(AD_CONST_SM_EVENT_VEHICLE_ARRIVED);
 }
 
 void common_driver::sim_gate_status(const bool is_close)
 {
     m_gate_is_close = is_close;
-    if (is_close)
-    {
-        emit_event(AD_CONST_SM_EVENT_ON_SCALE);
-    }
 }
 
 void common_driver::sim_scale_weight(const double weight)

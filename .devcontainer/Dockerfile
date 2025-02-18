@@ -16,3 +16,7 @@ WORKDIR /software/LuaBridge-master
 RUN cp -a Source/LuaBridge /usr/include/
 WORKDIR /root/
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y libpam-dev
+COPY .vimrc /root/
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y luarocks
+RUN luarocks install lua-cjson
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y ne
