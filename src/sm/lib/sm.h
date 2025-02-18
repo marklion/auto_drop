@@ -109,10 +109,6 @@ public:
     virtual void register_lua_function_virt(lua_State *_L) = 0;
     void register_lua_function()
     {
-        luabridge::getGlobalNamespace(m_L)
-            .beginClass<DYNAMIC_SM>("DYNAMIC_SM")
-            .addFunction("proc_event", &DYNAMIC_SM::proc_event)
-            .endClass();
         register_lua_function_virt(m_L);
     }
     void change_state(SM_STATE_PTR &_next_state)

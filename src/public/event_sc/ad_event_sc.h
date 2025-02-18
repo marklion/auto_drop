@@ -27,7 +27,7 @@ class AD_EVENT_SC_TIMER_NODE : public AD_EVENT_SC_NODE
     AD_LOGGER m_logger;
 
 public:
-    AD_EVENT_SC_TIMER_NODE(int _timeout, std::function<void()> _callback);
+    AD_EVENT_SC_TIMER_NODE(int _timeout, std::function<void()> _callback, int _micro_timeout = 0);
 
     ~AD_EVENT_SC_TIMER_NODE();
 
@@ -51,6 +51,7 @@ public:
 private:
     ACR_STATE m_state = ACR_STATE_READY;
     static ucontext_t m_global_context;
+    bool m_yield_result = true;
 public:
     ucontext_t m_context = {0};
     char m_stacks[128 * 1024] = {0};
@@ -77,6 +78,14 @@ public:
         set_co_state(ACR_STATE_SUSPEND);
         swapcontext(&m_context, _main_co);
     }
+    void set_yield_result(bool _result)
+    {
+        m_yield_result = _result;
+    }
+    bool get_yield_result()
+    {
+        return m_yield_result;
+    }
     static void co_run(std::function<void()> _main_func);
 };
 typedef std::shared_ptr<AD_CO_ROUTINE> AD_CO_ROUTINE_PTR;
@@ -94,9 +103,10 @@ public:
     void unregisterNode(AD_EVENT_SC_NODE_PTR _node);
 
     AD_EVENT_SC_TIMER_NODE_PTR startTimer(int _timeout, std::function<void()> _callback);
+    AD_EVENT_SC_TIMER_NODE_PTR startTimer(int _timeout,int _micro_timeout, std::function<void()> _callback);
     void stopTimer(AD_EVENT_SC_TIMER_NODE_PTR _timer);
 
-    void yield_by_fd(int _fd);
+    bool yield_by_fd(int _fd, int _micro_sec = 0);
     void yield_by_timer(int _timeout);
 
     // 运行事件循环

@@ -170,6 +170,12 @@ public:
             m_event_sc->stopTimer(_timer);
         }
     }
+    void trigger_sm_by_event(const std::string &_event)
+    {
+        m_event_sc->add_co(
+            [this, _event]()
+            { proc_event(_event); });
+    }
 
     luabridge::LuaRef call_http_api(const std::string &_url, const std::string &_method, luabridge::LuaRef _body, luabridge::LuaRef _header);
 

@@ -74,9 +74,14 @@ void AD_EVENT_SC::unregisterNode(AD_EVENT_SC_NODE_PTR _node)
 
 AD_EVENT_SC_TIMER_NODE_PTR AD_EVENT_SC::startTimer(int _timeout, std::function<void()> _callback)
 {
-    auto timer = std::make_shared<AD_EVENT_SC_TIMER_NODE>(_timeout, _callback);
+    return startTimer(_timeout, 0, _callback);
+}
+
+AD_EVENT_SC_TIMER_NODE_PTR AD_EVENT_SC::startTimer(int _timeout, int _micro_timeout, std::function<void()> _callback)
+{
+    auto timer = std::make_shared<AD_EVENT_SC_TIMER_NODE>(_timeout, _callback, _micro_timeout);
     registerNode(timer);
-    m_logger.log(AD_LOGGER::DEBUG, "Start %ds timer", _timeout);
+    m_logger.log(AD_LOGGER::DEBUG, "Start %ds-%dms timer", _timeout, _micro_timeout);
     return timer;
 }
 
@@ -91,10 +96,21 @@ class AD_CO_EVENT_NODE : public AD_EVENT_SC_NODE
     AD_EVENT_SC_PTR m_event_sc;
     AD_CO_ROUTINE_PTR m_co;
     int m_fd = -1;
-
+    AD_EVENT_SC_TIMER_NODE_PTR m_timer;
 public:
-    AD_CO_EVENT_NODE(AD_EVENT_SC_PTR _event_sc, int _fd) : m_event_sc(_event_sc), m_co(_event_sc->get_current_co()), m_fd(_fd)
+    AD_CO_EVENT_NODE(AD_EVENT_SC_PTR _event_sc, int _fd, int _micro_sec = 0) : m_event_sc(_event_sc), m_co(_event_sc->get_current_co()), m_fd(_fd)
     {
+        if (_micro_sec > 0)
+        {
+            m_timer = m_event_sc->startTimer(
+                0,
+                _micro_sec,
+                [&]()
+                {
+                    handleEvent();
+                    m_co->set_yield_result(false);
+                });
+        }
     }
     virtual int getFd() const override
     {
@@ -102,24 +118,30 @@ public:
     }
     virtual void handleEvent() override
     {
+        if (m_timer)
+        {
+            m_event_sc->stopTimer(m_timer);
+        }
         m_co->set_co_state(AD_CO_ROUTINE::ACR_STATE_READY);
+        m_co->set_yield_result(true);
         m_event_sc->unregisterNode(shared_from_this());
     }
 };
-void AD_EVENT_SC::yield_by_fd(int _fd)
+bool AD_EVENT_SC::yield_by_fd(int _fd, int _micro_sec)
 {
-    auto co_node = std::make_shared<AD_CO_EVENT_NODE>(std::static_pointer_cast<AD_EVENT_SC>(shared_from_this()), _fd);
+    auto co_node = std::make_shared<AD_CO_EVENT_NODE>(std::static_pointer_cast<AD_EVENT_SC>(shared_from_this()), _fd, _micro_sec);
     registerNode(co_node);
     yield_co();
+    return m_current_co->get_yield_result();
 }
 
 void AD_EVENT_SC::yield_by_timer(int _timeout)
 {
     auto cur_cor = m_current_co;
-    AD_EVENT_SC_TIMER_NODE_PTR timer = startTimer(_timeout, [&]() {
+    AD_EVENT_SC_TIMER_NODE_PTR timer = startTimer(_timeout, [&]()
+                                                  {
         stopTimer(timer);
-        cur_cor->set_co_state(AD_CO_ROUTINE::ACR_STATE_READY);
-    });
+        cur_cor->set_co_state(AD_CO_ROUTINE::ACR_STATE_READY); });
     yield_co();
 }
 
@@ -150,32 +172,42 @@ int AD_EVENT_SC::getFd() const
 
 void AD_EVENT_SC::handleEvent()
 {
-    while (true)
+    bool still_has_ready_co = true;
+    while (still_has_ready_co)
     {
-        bool has_ready_co = false;
+        std::vector<AD_CO_ROUTINE_PTR> ready_co;
+        for (auto &itr : m_co_routines)
+        {
+            if (itr->get_co_state() == AD_CO_ROUTINE::ACR_STATE_READY)
+            {
+                ready_co.push_back(itr);
+            }
+        }
+        if (ready_co.size() == 0)
+        {
+            still_has_ready_co = false;
+        }
+        else
+        {
+            still_has_ready_co = true;
+        }
+        for (auto &co : ready_co)
+        {
+            resume_co(co);
+        }
         for (auto itr = m_co_routines.begin(); itr != m_co_routines.end();)
         {
-            auto &co = *itr;
-            if (co->get_co_state() == AD_CO_ROUTINE::ACR_STATE_READY)
-            {
-                has_ready_co = true;
-                resume_co(co);
-            }
-            if (co->get_co_state() == AD_CO_ROUTINE::ACR_STATE_DEAD)
+            if ((*itr)->get_co_state() == AD_CO_ROUTINE::ACR_STATE_DEAD)
             {
                 itr = m_co_routines.erase(itr);
             }
             else
             {
-
                 itr++;
             }
         }
-        if (!has_ready_co)
-        {
-            break;
-        }
     }
+
     const int MAX_EVENTS = 1;
     struct epoll_event events[MAX_EVENTS] = {0};
     if (m_fdToNode.size() == 0)
@@ -228,14 +260,14 @@ void AD_EVENT_SC::non_block_system(const std::string &_cmd)
     }
 }
 
-AD_EVENT_SC_TIMER_NODE::AD_EVENT_SC_TIMER_NODE(int _timeout, std::function<void()> _callback) : m_callback(_callback), m_timeout(_timeout), m_logger("TIMER")
+AD_EVENT_SC_TIMER_NODE::AD_EVENT_SC_TIMER_NODE(int _timeout, std::function<void()> _callback, int _micro_sec) : m_callback(_callback), m_timeout(_timeout), m_logger("TIMER")
 {
     auto fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
     if (fd >= 0)
     {
         itimerspec ts = {
-            {_timeout, 0}, // 第一次超时时间
-            {_timeout, 0}  // 之后每次超时时间
+            {_timeout, _micro_sec * 1000 * 1000}, // 第一次超时时间
+            {_timeout, _micro_sec * 1000 * 1000}  // 之后每次超时时间
         };
         timerfd_settime(fd, 0, &ts, nullptr);
         m_timer_fd = fd;

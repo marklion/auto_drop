@@ -9,7 +9,7 @@ static void print_log(const std::string &_log)
 void RUNNER::register_lua_function_virt(lua_State *_L)
 {
     luabridge::getGlobalNamespace(_L)
-        .deriveClass<RUNNER, DYNAMIC_SM>("RUNNER")
+        .beginClass<RUNNER>("RUNNER")
         .addFunction("start_timer", &RUNNER::start_timer)
         .addFunction("stop_timer", &RUNNER::stop_timer)
         .addFunction("dev_voice_broadcast", &RUNNER::dev_voice_broadcast)
@@ -21,6 +21,7 @@ void RUNNER::register_lua_function_virt(lua_State *_L)
         .addFunction("dev_vehicle_rd_detect", &RUNNER::dev_vehicle_rd_detect)
         .addFunction("dev_vehicle_passed_gate", &RUNNER::dev_vehicle_passed_gate)
         .addFunction("call_http_api", &RUNNER::call_http_api)
+        .addFunction("trigger_event", &RUNNER::trigger_sm_by_event)
         .endClass()
         .beginClass<AD_EVENT_SC_TIMER_NODE_PTR>("AD_EVENT_SC_TIMER_NODE_PTR")
         .endClass()
@@ -55,7 +56,7 @@ luabridge::LuaRef RUNNER::call_http_api(const std::string &_url, const std::stri
     try
     {
         tmp_log.log(AD_LOGGER::INFO, "call_http_api: %s %s %s", _url.c_str(), _method.c_str(), body_str.c_str());
-        auto resp = req.Send();
+        auto resp = req.Send(2200);
         tmp_log.log(AD_LOGGER::INFO, "api resp: %s", resp.StrBody().c_str());
         ret = decode_func(std::string(resp.StrBody()));
     }

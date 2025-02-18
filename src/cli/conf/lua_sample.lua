@@ -31,7 +31,7 @@ sm:dev_vehicle_rd_detect(device) 车辆雷达检测结果检测
 sm:dev_vehicle_passed_gate(device) 获取车辆是否通过闸机
     参数:device为闸机设备名称
     返回:是否通过
-sm:proc_event(event_name) 触发事件
+sm:trigger_event(event_name) 触发事件
     参数:event_name为事件名称
 sm:call_http_api(url, method, body, header) 调用外部的http接口
     参数:url为接口地址
@@ -51,7 +51,7 @@ some_timer = sm:start_timer(1,function()
                 sm:dev_voice_stop("some_device")
                 sm:dev_led_stop("some_device")
                 sm:stop_timer(some_timer)
-                sm:proc_event("some_event")
+                sm:trigger_event("some_event")
         end)
 end)
 这段代码表示：

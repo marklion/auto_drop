@@ -29,6 +29,7 @@
 #endif // !SION_DISABLE_SSL
 #include "../../rpc/ad_rpc.h"
 #include <sys/epoll.h>
+#include <fcntl.h>
 namespace sion
 {
 class Request;
@@ -667,10 +668,10 @@ class Request
         return Send(url);
     }
 
-    Response Send() { return Send(url_); }
+    Response Send(int _micro_sec = 0) { return Send(url_, _micro_sec); }
 #ifndef SION_DISABLE_SSL
   private:
-    Response SendBySSL(Socket socket)
+    Response SendBySSL(Socket socket, int _micro_sec = 0)
     {
         SSL_library_init();
         auto method = TLS_method();
@@ -678,9 +679,32 @@ class Request
         auto ssl = SSL_new(ssl_ctx);
         check(ssl != nullptr && ssl_ctx != nullptr, "openssl初始化异常");
         SSL_set_fd(ssl, socket);
-        SSL_connect(ssl);
+        // Set the socket to non-blocking mode
+        int flags = fcntl(socket, F_GETFL, 0);
+        check(flags != -1, "获取socket flags失败");
+        flags = fcntl(socket, F_SETFL, flags | O_NONBLOCK);
+        check(flags != -1, "设置socket非阻塞失败");
+        while (true)
+        {
+            auto ssl_ret = SSL_connect(ssl);
+            auto err_code = SSL_get_error(ssl, ssl_ret);
+            if (err_code == SSL_ERROR_WANT_READ || err_code == SSL_ERROR_WANT_WRITE)
+            {
+                AD_RPC_SC::get_instance()->yield_by_fd(socket, 10000);
+                continue;
+            }
+            else
+            {
+                break;
+            }
+        }
+        // Set the socket back to blocking mode
+        flags = fcntl(socket, F_GETFL, 0);
+        check(flags != -1, "获取socket flags失败");
+        flags = fcntl(socket, F_SETFL, flags & ~O_NONBLOCK);
+        check(flags != -1, "设置socket阻塞失败");
         SSL_write(ssl, source_.data(), int(source_.size()));
-        auto resp = ReadResponse(socket, ssl);
+        auto resp = ReadResponse(socket, ssl, _micro_sec);
         SSL_shutdown(ssl);
         SSL_free(ssl);
         SSL_CTX_free(ssl_ctx);
@@ -688,8 +712,8 @@ class Request
     }
 
 #endif
-  public:
-    Response Send(String url)
+public:
+    Response Send(String url, int _micro_sec = 0)
     {
         check<std::invalid_argument>(method_.length(), "请求方法未定义");
         std::smatch m;
@@ -724,16 +748,16 @@ class Request
             if (protocol_ == "http" || enable_proxy_)
             {
                 send(socket, source_.data(), static_cast<int>(source_.size()), 0);
-                return ReadResponse(socket);
+                return ReadResponse(socket, nullptr, _micro_sec);
             }
 #ifndef SION_DISABLE_SSL
             else // if (protocol_ == "https")
             {
-                return SendBySSL(socket);
+                return SendBySSL(socket, _micro_sec);
             }
 #endif
         }
-        catch (const std::exception& e)
+        catch (const std::exception &e)
         {
 #ifdef _WIN32
             WSACleanup();
@@ -743,14 +767,14 @@ class Request
         throw Error("unreachable code");
     }
 
-  private:
+private:
     void BuildRequestString()
     {
         request_header_.Add("Host", host_);
         request_header_.Add("Content-Length", std::to_string(request_body_.size()));
         auto request_target = enable_proxy_ ? url_ : path_;
         String source_str = method_ + " " + request_target + " " + protocol_version_ + crlf;
-        for (auto& x : request_header_.Data())
+        for (auto &x : request_header_.Data())
         {
             source_str += x.first + ": " + x.second + crlf;
         }
@@ -769,7 +793,7 @@ class Request
         saddr.sin_family = AF_INET;
         saddr.sin_port = htons(enable_proxy_ ? proxy_.port : port_);
         saddr.sin_addr = sa;
-        if (::connect(socket, (sockaddr*)&saddr, sizeof(saddr)) != 0)
+        if (::connect(socket, (sockaddr *)&saddr, sizeof(saddr)) != 0)
         {
             String err = "连接失败:\n";
             err += "Host:" + host_ + "\n";
@@ -788,17 +812,19 @@ class Request
         }
     }
 #ifndef SION_DISABLE_SSL
-    Response ReadResponse(Socket socket, SSL* ssl = nullptr)
+    Response ReadResponse(Socket socket, SSL *ssl = nullptr, int _micro_sec = 0)
 #else
     Response ReadResponse(Socket socket)
 #endif
     {
         const int buf_size = 2048;
         std::array<char, buf_size> buf{0};
-        auto Read = [&]() {
+        auto Read = [&]()
+        {
             buf.fill(0);
             int status = 0;
-            AD_RPC_SC::get_instance()->yield_by_fd(socket);
+            auto not_time_out = AD_RPC_SC::get_instance()->yield_by_fd(socket, _micro_sec);
+            check(not_time_out, "网络超时");
             if (protocol_ == "http" || enable_proxy_)
             {
                 status = recv(socket, buf.data(), buf_size - 1, 0);
@@ -839,8 +865,9 @@ class Request
 
         resp.ParseHeader();
         // 检查是否接收完
-        auto check_end = [&] {
-            const auto& body = resp.Body();
+        auto check_end = [&]
+        {
+            const auto &body = resp.Body();
             if (resp.is_chunked_)
             {
                 if (body.size() < 7)
@@ -856,7 +883,7 @@ class Request
                 }
                 auto chunked_start_offset = chunked_end_offset - 1;
                 // 有些不是\r\n0\r\n\r\n 而是\r\n000000\r\n\r\n
-                for (auto& i = chunked_start_offset; i >= 2; i--)
+                for (auto &i = chunked_start_offset; i >= 2; i--)
                 {
                     auto r = body[i];
                     if (r != '0')
@@ -892,7 +919,7 @@ class Request
     }
 };
 
-static Response Fetch(String url, Method method = Method::Get, Header header = Header(), String body = "")
+static Response Fetch(String url, Method method = Method::Get, Header header = Header(), String body = "", int _micro_sec = 0)
 {
     return Request().SetUrl(url).SetHttpMethod(method).SetHeader(header).SetBody(body).Send();
 }
