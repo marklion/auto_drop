@@ -24,7 +24,6 @@ class AD_EVENT_SC_TIMER_NODE : public AD_EVENT_SC_NODE
     int m_timer_fd = -1;
     std::function<void()> m_callback;
     int m_timeout;
-    AD_LOGGER m_logger;
 
 public:
     AD_EVENT_SC_TIMER_NODE(int _timeout, std::function<void()> _callback, int _micro_timeout = 0);
@@ -107,7 +106,7 @@ public:
     void stopTimer(AD_EVENT_SC_TIMER_NODE_PTR _timer);
 
     bool yield_by_fd(int _fd, int _micro_sec = 0);
-    void yield_by_timer(int _timeout);
+    void yield_by_timer(int _timeout, int yield_micro_sec = 0);
 
     // 运行事件循环
     void runEventLoop();

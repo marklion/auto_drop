@@ -347,6 +347,27 @@ static void disable_log(std::ostream &out, std::vector<std::string> _params)
     }
 }
 
+void reset_sm(std::ostream &out, std::vector<std::string> _params)
+{
+    u16 sm_port = 0;
+    auto run_sm = get_run_sm();
+    if (run_sm.size() > 0)
+    {
+        sm_port = run_sm[0].port;
+    }
+
+    if (sm_port > 0)
+    {
+        AD_RPC_SC::get_instance()->call_remote<runner_smClient>(
+            sm_port,
+            "runner_sm",
+            [&](runner_smClient &client)
+            {
+                client.reset_sm();
+            });
+    }
+}
+
 static std::unique_ptr<cli::Menu> make_runtime_menu()
 {
     std::unique_ptr<cli::Menu> sm_menu(new cli::Menu("runtime"));
@@ -357,6 +378,7 @@ static std::unique_ptr<cli::Menu> make_runtime_menu()
     sm_menu->Insert(CLI_MENU_ITEM(disable_log), "取消日志", {"模块", "日志级别"});
     sm_menu->Insert(CLI_MENU_ITEM(open_log), "打开日志");
     sm_menu->Insert(CLI_MENU_ITEM(close_log), "关闭日志");
+    sm_menu->Insert(CLI_MENU_ITEM(reset_sm), "重置状态机");
     return sm_menu;
 }
 

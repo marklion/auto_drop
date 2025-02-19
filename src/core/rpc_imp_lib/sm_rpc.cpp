@@ -78,5 +78,5 @@ bool runner_sm_impl::check_lua_code(const std::string &code, const bool is_real_
 
 void runner_sm_impl::reset_sm()
 {
-    m_runner->proc_event(AD_CONST_SM_EVENT_RESET);
+    m_runner->trigger_sm_by_event(AD_CONST_SM_EVENT_RESET);
 }

@@ -49,3 +49,21 @@ void AD_LOGGER::output_log(const std::string &_content)
     auto self_pid = getpid();
     ofs << "[" << self_pid << "]" << _content << std::endl;
 }
+
+std::vector<std::string> ad_utils_split_string(const std::string &str, const std::string &delimiter)
+{
+    std::vector<std::string> result;
+    size_t start = 0;
+    size_t end = str.find(delimiter);
+
+    while (end != std::string::npos)
+    {
+        result.push_back(str.substr(start, end - start));
+        start = end + delimiter.length();
+        end = str.find(delimiter, start);
+    }
+
+    result.push_back(str.substr(start));
+
+    return result;
+}

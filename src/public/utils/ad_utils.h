@@ -10,7 +10,9 @@
 #include <ctime>
 #include <cstdarg>
 #include <map>
+#include <vector>
 
+std::vector<std::string> ad_utils_split_string(const std::string &str, const std::string &delimiter);
 struct ad_utils_date_time
 {
     std::string m_date;
@@ -76,10 +78,12 @@ public:
         va_start(args, format);
         vsnprintf(buffer, sizeof(buffer), format.c_str(), args);
         va_end(args);
-
-        std::string log_message = "[" + ad_utils_date_time().m_datetime_ms + "] [" + level_to_string(level) + "] [" + m_module_name+ "] " + buffer;
-
-        output_log(log_message);
+        auto multi_line = ad_utils_split_string(buffer, "\n");
+        for (const auto &line : multi_line)
+        {
+            std::string log_message = "[" + ad_utils_date_time().m_datetime_ms + "] [" + level_to_string(level) + "] [" + m_module_name + "] " + line;
+            output_log(log_message);
+        }
     }
 
     // 重载log函数，默认日志等级为INFO

@@ -39,6 +39,9 @@ sm:call_http_api(url, method, body, header) 调用外部的http接口
         body为请求体
         header为请求头
     返回:http请求的回复
+sm:sleep_wait(sec, micro_sec) 睡眠等待
+    参数:sec为秒数
+        micro_sec为微秒数
 print_log(log) 打印日志
     参数:log为日志内容
 举例1：

@@ -172,10 +172,11 @@ public:
     }
     void trigger_sm_by_event(const std::string &_event)
     {
-        m_event_sc->add_co(
+        AD_RPC_SC::get_instance()->add_co(
             [this, _event]()
             { proc_event(_event); });
     }
+    void sleep_wait(int _sec, int _micro_sec);
 
     luabridge::LuaRef call_http_api(const std::string &_url, const std::string &_method, luabridge::LuaRef _body, luabridge::LuaRef _header);
 

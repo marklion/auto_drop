@@ -12,6 +12,7 @@ void RUNNER::register_lua_function_virt(lua_State *_L)
         .beginClass<RUNNER>("RUNNER")
         .addFunction("start_timer", &RUNNER::start_timer)
         .addFunction("stop_timer", &RUNNER::stop_timer)
+        .addFunction("sleep_wait", &RUNNER::sleep_wait)
         .addFunction("dev_voice_broadcast", &RUNNER::dev_voice_broadcast)
         .addFunction("dev_voice_stop", &RUNNER::dev_voice_stop)
         .addFunction("dev_led_display", &RUNNER::dev_led_display)
@@ -35,6 +36,11 @@ void RUNNER::register_lua_function_virt(lua_State *_L)
             "\tprint_log_string(tostring(log))\n"
             "end\n"
             "cjson = require('cjson')\n");
+}
+
+void RUNNER::sleep_wait(int _sec, int _micro_sec)
+{
+    AD_RPC_SC::get_instance()->yield_by_timer(_sec, _micro_sec);
 }
 
 luabridge::LuaRef RUNNER::call_http_api(const std::string &_url, const std::string &_method, luabridge::LuaRef _body, luabridge::LuaRef _header)

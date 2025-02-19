@@ -155,7 +155,14 @@ static std::string get_current_action(const std::string &_state_name, const std:
     auto sm_state_config = get_state_from_sm(orig_node["sm"], _state_name);
     if (!sm_state_config.IsNull())
     {
-        ret = sm_state_config[_action_type].as<std::string>("");
+        if (_action_type == "do")
+        {
+            ret = sm_state_config["do"]["action"].as<std::string>("");
+        }
+        else
+        {
+            ret = sm_state_config[_action_type].as<std::string>("");
+        }
     }
     return ret;
 }

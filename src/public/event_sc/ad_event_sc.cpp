@@ -81,14 +81,14 @@ AD_EVENT_SC_TIMER_NODE_PTR AD_EVENT_SC::startTimer(int _timeout, int _micro_time
 {
     auto timer = std::make_shared<AD_EVENT_SC_TIMER_NODE>(_timeout, _callback, _micro_timeout);
     registerNode(timer);
-    m_logger.log(AD_LOGGER::DEBUG, "Start %ds-%dms timer", _timeout, _micro_timeout);
+    m_logger.log(AD_LOGGER::DEBUG, "TIMER%d Start %ds-%dms timer",timer->getFd(), _timeout, _micro_timeout);
     return timer;
 }
 
 void AD_EVENT_SC::stopTimer(AD_EVENT_SC_TIMER_NODE_PTR _timer)
 {
     unregisterNode(_timer);
-    m_logger.log(AD_LOGGER::DEBUG, "Stop timer");
+    m_logger.log(AD_LOGGER::DEBUG, "TIMER%d Stop timer", _timer->getFd());
 }
 
 class AD_CO_EVENT_NODE : public AD_EVENT_SC_NODE
@@ -135,13 +135,17 @@ bool AD_EVENT_SC::yield_by_fd(int _fd, int _micro_sec)
     return m_current_co->get_yield_result();
 }
 
-void AD_EVENT_SC::yield_by_timer(int _timeout)
+void AD_EVENT_SC::yield_by_timer(int _timeout, int _micro_sec)
 {
     auto cur_cor = m_current_co;
-    AD_EVENT_SC_TIMER_NODE_PTR timer = startTimer(_timeout, [&]()
-                                                  {
-        stopTimer(timer);
-        cur_cor->set_co_state(AD_CO_ROUTINE::ACR_STATE_READY); });
+    AD_EVENT_SC_TIMER_NODE_PTR timer = startTimer(
+        _timeout,
+        _micro_sec,
+        [&]()
+        {
+            stopTimer(timer);
+            cur_cor->set_co_state(AD_CO_ROUTINE::ACR_STATE_READY);
+        });
     yield_co();
 }
 
@@ -260,7 +264,7 @@ void AD_EVENT_SC::non_block_system(const std::string &_cmd)
     }
 }
 
-AD_EVENT_SC_TIMER_NODE::AD_EVENT_SC_TIMER_NODE(int _timeout, std::function<void()> _callback, int _micro_sec) : m_callback(_callback), m_timeout(_timeout), m_logger("TIMER")
+AD_EVENT_SC_TIMER_NODE::AD_EVENT_SC_TIMER_NODE(int _timeout, std::function<void()> _callback, int _micro_sec) : m_callback(_callback), m_timeout(_timeout)
 {
     auto fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
     if (fd >= 0)
@@ -271,7 +275,6 @@ AD_EVENT_SC_TIMER_NODE::AD_EVENT_SC_TIMER_NODE(int _timeout, std::function<void(
         };
         timerfd_settime(fd, 0, &ts, nullptr);
         m_timer_fd = fd;
-        m_logger.log(AD_LOGGER::DEBUG, "Create %ds timer fd:%d", _timeout, m_timer_fd);
     }
 }
 
@@ -280,7 +283,6 @@ AD_EVENT_SC_TIMER_NODE::~AD_EVENT_SC_TIMER_NODE()
     if (m_timer_fd >= 0)
     {
         close(m_timer_fd);
-        m_logger.log(AD_LOGGER::DEBUG, "Close timer fd:%d", m_timer_fd);
     }
 }
 
@@ -291,16 +293,17 @@ int AD_EVENT_SC_TIMER_NODE::getFd() const
 
 void AD_EVENT_SC_TIMER_NODE::handleEvent()
 {
+    AD_LOGGER tmp_logger("TIMER" + std::to_string(m_timer_fd));
     unsigned long long exp;
     auto read_len = read(m_timer_fd, &exp, sizeof(exp));
     if (read_len == sizeof(exp))
     {
-        m_logger.log(AD_LOGGER::DEBUG, "%ds timer fd:%d expired", m_timeout, m_timer_fd);
+        tmp_logger.log(AD_LOGGER::DEBUG, "%ds timer fd:%d expired", m_timeout, m_timer_fd);
         m_callback();
     }
     else
     {
-        m_logger.log(AD_LOGGER::ERROR, "Failed to read timer fd:%s", strerror(errno));
+        tmp_logger.log(AD_LOGGER::ERROR, "Failed to read timer fd:%s", strerror(errno));
     }
 }
 
