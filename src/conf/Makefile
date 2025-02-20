@@ -11,6 +11,7 @@ $(DELIVER_PATH):$(DELIVER_CONF_PATH)
 $(DELIVER_CONF_PATH):
 	[ -d $(DELIVER_CONF_PATH) ] || mkdir -p $(DELIVER_CONF_PATH)
 	cp $(SRC_DIR)/nginx.conf $(DELIVER_CONF_PATH)
+	cp $(SRC_DIR)/lidar_config_sample.ini $(DELIVER_CONF_PATH)
 clean:
 	rm -rf $(DELIVER_PATH) $(SRC_DIR)/cmake_tmp_dir
 

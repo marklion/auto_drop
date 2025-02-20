@@ -11,6 +11,7 @@
 #include <cstdarg>
 #include <map>
 #include <vector>
+#include "SimpleIni.h"
 
 std::vector<std::string> ad_utils_split_string(const std::string &str, const std::string &delimiter);
 struct ad_utils_date_time
@@ -127,6 +128,19 @@ private:
             {INFO, "INFO"},
             {ERROR, "ERROR"}};
         return level_map[level];
+    }
+};
+
+class AD_INI_CONFIG{
+    std::string m_file_path;
+    CSimpleIniA m_ini;
+public:
+    AD_INI_CONFIG(const std::string &file_path):m_file_path(file_path){
+        m_ini.SetUnicode();
+        m_ini.LoadFile(m_file_path.c_str());
+    }
+    std::string get_config(const std::string &_section, const std::string &_key, const std::string &_default = ""){
+        return m_ini.GetValue(_section.c_str(), _key.c_str(), _default.c_str());
     }
 };
 

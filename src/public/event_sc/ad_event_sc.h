@@ -25,7 +25,7 @@ class AD_EVENT_SC_TIMER_NODE : public AD_EVENT_SC_NODE
     int m_timer_fd = -1;
     std::function<void()> m_callback;
     int m_timeout;
-
+    int m_micro_timeout;
 public:
     AD_EVENT_SC_TIMER_NODE(int _timeout, std::function<void()> _callback, int _micro_timeout = 0);
 

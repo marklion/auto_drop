@@ -265,7 +265,7 @@ void AD_EVENT_SC::non_block_system(const std::string &_cmd)
     }
 }
 
-AD_EVENT_SC_TIMER_NODE::AD_EVENT_SC_TIMER_NODE(int _timeout, std::function<void()> _callback, int _micro_sec) : m_callback(_callback), m_timeout(_timeout)
+AD_EVENT_SC_TIMER_NODE::AD_EVENT_SC_TIMER_NODE(int _timeout, std::function<void()> _callback, int _micro_sec) : m_callback(_callback), m_timeout(_timeout), m_micro_timeout(_micro_sec)
 {
     auto fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
     if (fd >= 0)
@@ -299,7 +299,7 @@ void AD_EVENT_SC_TIMER_NODE::handleEvent()
     auto read_len = read(m_timer_fd, &exp, sizeof(exp));
     if (read_len == sizeof(exp))
     {
-        tmp_logger.log(AD_LOGGER::DEBUG, "%ds timer fd:%d expired", m_timeout, m_timer_fd);
+        tmp_logger.log(AD_LOGGER::DEBUG, "%ds-%dms timer fd:%d expired", m_timeout, m_micro_timeout, m_timer_fd);
         m_callback();
     }
     else
