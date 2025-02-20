@@ -58,9 +58,11 @@ bool runner_sm_impl::check_lua_code(const std::string &code, const bool is_real_
     bool ret = false;
 
     auto p_tmp_runner = RUNNER::runner_init(YAML::LoadFile("/conf/sample.yaml")["sm"]);
-    luaL_openlibs(p_tmp_runner->m_L);
+    p_tmp_runner->lock_sm();
+    luaL_openlibs(p_tmp_runner->get_lua_state());
     p_tmp_runner->register_lua_function();
-    luabridge::setGlobal(p_tmp_runner->m_L, (RUNNER *)(p_tmp_runner.get()), "sm");
+    luabridge::setGlobal(p_tmp_runner->get_lua_state(), (RUNNER *)(p_tmp_runner.get()), "sm");
+    p_tmp_runner->unlock_sm();
     auto check_ret = p_tmp_runner->check_lua_code(code, is_real_run);
     if (check_ret.empty())
     {

@@ -243,7 +243,7 @@ static void input_action(std::ostream &out, std::vector<std::string> _params)
         while ((pos = lua_code.find("<>", pos)) != std::string::npos)
         {
             lua_code.replace(pos, 2, "\n");
-            pos += 2; // 跳过替换后的字符
+            pos += 1; // 跳过替换后的字符
         }
         auto ret = change_state_action(_params[0], _params[1], lua_code);
         out << ret << std::endl;

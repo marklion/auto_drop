@@ -61,7 +61,16 @@ class RUNNER : public DYNAMIC_SM, public RV_FATHER
         }
     };
     std::map<std::string, uint16_t> m_device_map;
+    AD_CO_MUTEX m_mutex = AD_CO_MUTEX(AD_RPC_SC::get_instance());
 public:
+    virtual void lock_sm() override
+    {
+        m_mutex.lock();
+    }
+    virtual void unlock_sm() override
+    {
+        m_mutex.unlock();
+    }
     virtual void register_lua_function_virt(lua_State *_L) override;
     void set_device(const std::string &_device_name, const uint16_t _device_id)
     {

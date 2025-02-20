@@ -32,19 +32,25 @@ SM_STATE_PTR SM_STATE_FACTORY::create_sm_state(const std::string &_name)
 void SM_STATE::before_enter(DYNAMIC_SM &_sm)
 {
     m_logger.log(AD_LOGGER::DEBUG, "state %s before enter", m_state_name.c_str());
+    _sm.lock_sm();
     call_lua_func(_sm.get_lua_state(), m_before_enter_lua_func);
+    _sm.unlock_sm();
 }
 
 void SM_STATE::after_exit(DYNAMIC_SM &_sm)
 {
     m_logger.log(AD_LOGGER::DEBUG, "state %s after exit", m_state_name.c_str());
+    _sm.lock_sm();
     call_lua_func(_sm.get_lua_state(), m_after_exit_lua_func);
+    _sm.unlock_sm();
 }
 
 SM_STATE_PTR SM_STATE::do_action(DYNAMIC_SM &_sm)
 {
     m_logger.log(AD_LOGGER::DEBUG, "state %s do action", m_state_name.c_str());
+    _sm.lock_sm();
     call_lua_func(_sm.get_lua_state(), m_do_lua_func);
+    _sm.unlock_sm();
     SM_STATE_PTR ret;
 
     if (m_next_state.length() > 0)

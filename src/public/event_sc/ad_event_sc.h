@@ -5,6 +5,7 @@
 #include <memory>
 #include <ucontext.h>
 #include <vector>
+#include <list>
 #include "../utils/ad_utils.h"
 
 class AD_EVENT_SC_NODE : public std::enable_shared_from_this<AD_EVENT_SC_NODE>
@@ -89,6 +90,8 @@ public:
 };
 typedef std::shared_ptr<AD_CO_ROUTINE> AD_CO_ROUTINE_PTR;
 
+
+
 class AD_EVENT_SC : public AD_EVENT_SC_NODE
 {
 public:
@@ -150,7 +153,20 @@ private:
     AD_CO_ROUTINE_PTR m_current_co;
 };
 typedef std::shared_ptr<AD_EVENT_SC> AD_EVENT_SC_PTR;
-
+class AD_CO_MUTEX
+{
+    bool m_is_locked = false;
+    std::list<AD_CO_ROUTINE_PTR> m_wait_co;
+    AD_EVENT_SC_PTR m_belong;
+    AD_CO_ROUTINE_PTR m_holder;
+    AD_LOGGER m_logger;
+    int m_self_count = 0;
+public:
+    AD_CO_MUTEX(AD_EVENT_SC_PTR _belong) : m_belong(_belong), m_logger("MUTEX") {}
+    ~AD_CO_MUTEX(){}
+    void lock();
+    void unlock();
+};
 class AD_EVENT_SC_TCP_LISTEN_NODE;
 typedef std::shared_ptr<AD_EVENT_SC_TCP_LISTEN_NODE> AD_EVENT_SC_TCP_LISTEN_NODE_PTR;
 class AD_EVENT_SC_TCP_DATA_NODE;

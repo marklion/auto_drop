@@ -10,6 +10,7 @@
 #include <arpa/inet.h>
 #include <sys/wait.h>
 #include <sys/syscall.h>
+#include <algorithm>
 #include "ad_event_sc.h"
 
 AD_EVENT_SC::AD_EVENT_SC() : m_logger("EVENT_SC")
@@ -435,4 +436,45 @@ void AD_CO_ROUTINE::co_run(std::function<void()> _main_func)
 {
     auto init_co = std::make_shared<AD_CO_ROUTINE>(_main_func, &m_global_context);
     init_co->resume(&m_global_context);
+}
+
+void AD_CO_MUTEX::lock()
+{
+    m_logger.log(AD_LOGGER::DEBUG, "%p try lock %p", m_belong->get_current_co().get(), this);
+    if (m_holder != m_belong->get_current_co())
+    {
+        while (m_holder)
+        {
+            m_wait_co.push_back(m_belong->get_current_co());
+            m_belong->yield_co();
+        }
+    }
+    if (m_holder)
+    {
+        m_self_count++;
+    }
+    else
+    {
+        m_holder = m_belong->get_current_co();
+    }
+    m_logger.log(AD_LOGGER::DEBUG, "%p locked %p", m_belong->get_current_co().get(), this);
+}
+
+void AD_CO_MUTEX::unlock()
+{
+    if (m_self_count == 0)
+    {
+        m_holder = nullptr;
+    }
+    else
+    {
+        m_self_count--;
+    }
+    if (!m_holder && m_wait_co.size() > 0)
+    {
+        auto co = m_wait_co.front();
+        m_wait_co.pop_front();
+        co->set_co_state(AD_CO_ROUTINE::ACR_STATE_READY);
+    }
+    m_logger.log(AD_LOGGER::DEBUG, "%p unlocked %p", m_belong->get_current_co().get(), this);
 }

@@ -63,10 +63,17 @@ public:
     {
         if (!_func.empty())
         {
-            auto lua_ret = luaL_dostring(_L, _func.c_str());
-            if (lua_ret != LUA_OK)
+            try
             {
-                m_logger.log(AD_LOGGER::ERROR, "lua error: %s", lua_tostring(_L, -1));
+                auto lua_ret = luaL_dostring(_L, _func.c_str());
+                if (lua_ret != LUA_OK)
+                {
+                    m_logger.log(AD_LOGGER::ERROR, "lua error: %s", lua_tostring(_L, -1));
+                }
+            }
+            catch (const std::exception &e)
+            {
+                m_logger.log(AD_LOGGER::ERROR, "call_lua_func error: %s", e.what());
             }
         }
     }
@@ -93,9 +100,9 @@ public:
 class DYNAMIC_SM
 {
     AD_LOGGER m_logger = AD_LOGGER("sm");
+    lua_State *m_L = luaL_newstate();
 
 public:
-    lua_State *m_L = luaL_newstate();
     SM_STATE_PTR m_current_state;
 
     DYNAMIC_SM(const std::string &_init_state, SM_STATE_FACTORY_PTR _sm_state_factory)
@@ -106,14 +113,18 @@ public:
     {
         return m_L;
     }
+    virtual void lock_sm() = 0;
+    virtual void unlock_sm() = 0;
     virtual void register_lua_function_virt(lua_State *_L) = 0;
     void register_lua_function()
     {
+        lock_sm();
         register_lua_function_virt(m_L);
+        unlock_sm();
     }
     void change_state(SM_STATE_PTR &_next_state)
     {
-        m_logger.log( "切换状态 %s 到 %s", m_current_state->m_state_name.c_str(), _next_state->m_state_name.c_str());
+        m_logger.log("切换状态 %s 到 %s", m_current_state->m_state_name.c_str(), _next_state->m_state_name.c_str());
         m_current_state->after_exit(*this);
         m_current_state = std::move(_next_state);
         m_current_state->before_enter(*this);
@@ -121,10 +132,12 @@ public:
     template <typename T>
     void begin()
     {
+        lock_sm();
         luaL_openlibs(m_L);
         register_lua_function();
         luabridge::setGlobal(m_L, (T *)this, "sm");
         m_current_state->before_enter(*this);
+        unlock_sm();
         trigger();
     }
     void trigger()
@@ -149,22 +162,32 @@ public:
     std::string check_lua_code(const std::string &_code, bool _is_real_run = false)
     {
         std::string ret;
-        auto lua_ret = luaL_loadstring(m_L, _code.c_str());
-        if (lua_ret != LUA_OK)
+        lock_sm();
+        try
         {
-            ret = lua_tostring(m_L, -1);
-        }
-        else
-        {
-            if (_is_real_run)
+            auto lua_ret = luaL_loadstring(m_L, _code.c_str());
+            if (lua_ret != LUA_OK)
             {
-                lua_ret = lua_pcall(m_L, 0, LUA_MULTRET, 0);
-                if (lua_ret != LUA_OK)
+                ret = lua_tostring(m_L, -1);
+            }
+            else
+            {
+                if (_is_real_run)
                 {
-                    ret = lua_tostring(m_L, -1);
+                    lua_ret = lua_pcall(m_L, 0, LUA_MULTRET, 0);
+                    if (lua_ret != LUA_OK)
+                    {
+                        ret = lua_tostring(m_L, -1);
+                    }
                 }
             }
         }
+        catch (const std::exception &e)
+        {
+            m_logger.log(AD_LOGGER::ERROR, "check_lua_code error: %s", e.what());
+        }
+        unlock_sm();
+
         return ret;
     }
     virtual ~DYNAMIC_SM()

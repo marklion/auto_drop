@@ -45,8 +45,8 @@ void RUNNER::sleep_wait(int _sec, int _micro_sec)
 
 luabridge::LuaRef RUNNER::call_http_api(const std::string &_url, const std::string &_method, luabridge::LuaRef _body, luabridge::LuaRef _header)
 {
-    luabridge::LuaRef ret = luabridge::newTable(m_L);
-    auto json_lib = luabridge::getGlobal(m_L, "cjson");
+    luabridge::LuaRef ret = luabridge::newTable(get_lua_state());
+    auto json_lib = luabridge::getGlobal(get_lua_state(), "cjson");
     auto encode_func = json_lib["encode"];
     auto decode_func = json_lib["decode"];
 
