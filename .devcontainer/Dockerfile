@@ -40,3 +40,5 @@ WORKDIR /software/vtk-master
 RUN mkdir build
 WORKDIR /software/vtk-master/build
 RUN cmake .. && make -j 4 && make install
+WORKDIR /root/
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y libcdk5-dev
