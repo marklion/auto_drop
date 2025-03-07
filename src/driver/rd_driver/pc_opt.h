@@ -3,12 +3,16 @@
 
 #include "../lib/common_driver.h"
 
+bool should_stop_walk();
+
 class RS_DRIVER : public common_driver
 {
+    void *common_rs_driver_ptr = nullptr;
 public:
     RS_DRIVER(const std::string &_config_file);
+    virtual ~RS_DRIVER();
     virtual bool running_status_check() override;
-    void start();
+    void start(const std::string &_file = "", int _interval_sec = 0);
 
     virtual void voice_broadcast(const std::string &voice_content, const int32_t times)
     {

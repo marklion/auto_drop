@@ -4,6 +4,8 @@
 #include <pcl/filters/passthrough.h>
 #include <pcl/segmentation/sac_segmentation.h>
 #include <pcl/filters/extract_indices.h>
+#include <pcl/io/ply_io.h>
+#include <boost/filesystem.hpp>
 #include <rs_driver/api/lidar_driver.hpp>
 #include <rs_driver/msg/pcl_point_cloud_msg.hpp>
 #include <mutex>
@@ -18,6 +20,7 @@ static std::mutex g_rd_result_mutex;
 typedef pcl::PointXYZRGB myPoint;
 typedef pcl::PointCloud<myPoint> myPointCloud;
 typedef PointCloudT<myPoint> pcMsg;
+
 static std::shared_ptr<pcMsg> create_new_msg()
 {
     return std::make_shared<pcMsg>();
@@ -297,6 +300,31 @@ static void pc_transform(myPointCloud::Ptr cloud)
 
     pc_range_filter(ret);
 }
+static int g_total_frame = 0;
+static void write_cloud_to_file(std::shared_ptr<pcMsg> msg)
+{
+    myPointCloud::Ptr one_frame(new myPointCloud);
+    for (size_t i = 0; i < msg->points.size(); i++)
+    {
+        myPoint tmp;
+        tmp.x = msg->points[i].x;
+        tmp.y = msg->points[i].y;
+        tmp.z = msg->points[i].z;
+        tmp.r = 255;
+        tmp.g = 255;
+        tmp.b = 255;
+        one_frame->push_back(tmp);
+    }
+    static int file_no = 0;
+    std::string file_name = "/tmp/ply/file_" + std::to_string(file_no++) + ".ply";
+    boost::filesystem::path dir = boost::filesystem::path(file_name).parent_path();
+    if (!boost::filesystem::exists(dir))
+    {
+        boost::filesystem::create_directories(dir);
+    }
+    pcl::io::savePLYFileASCII(file_name, *one_frame);
+    g_total_frame++;
+}
 static void process_msg(std::shared_ptr<pcMsg> msg)
 {
     myPointCloud::Ptr one_frame(new myPointCloud);
@@ -319,23 +347,47 @@ RS_DRIVER::RS_DRIVER(const std::string &_config_file) : common_driver("RD_DRIVER
     g_ini_config = new AD_INI_CONFIG(_config_file);
 }
 
+RS_DRIVER::~RS_DRIVER()
+{
+    using namespace robosense::lidar;
+    if (this->common_rs_driver_ptr)
+    {
+        delete reinterpret_cast<LidarDriver<pcMsg> *>(this->common_rs_driver_ptr);
+    }
+}
+
 bool RS_DRIVER::running_status_check()
 {
     return true;
 }
 
-void RS_DRIVER::start()
+void RS_DRIVER::start(const std::string &_file, int _interval_sec)
 {
     using namespace robosense::lidar;
     RSDriverParam param;
     param.decoder_param.dense_points = true;
     param.input_param.msop_port = 6699;
     param.input_param.difop_port = 7788;
-    param.lidar_type = LidarType::RSBP;
+    param.lidar_type = LidarType::RSAIRY;
     param.input_type = InputType::ONLINE_LIDAR;
+    if (_file.length() > 0)
+    {
+        param.input_type = InputType::PCAP_FILE;
+        param.input_param.pcap_path = _file;
+        param.input_param.pcap_rate = 1000;
+        param.input_param.pcap_repeat = false;
+    }
 
-    LidarDriver<pcMsg> driver;
-    driver.regPointCloudCallback(create_new_msg, process_msg);
+    this->common_rs_driver_ptr = (void *)new LidarDriver<pcMsg>();
+    auto &driver = *reinterpret_cast<LidarDriver<pcMsg> *>(this->common_rs_driver_ptr);
+    if (_file.length() > 0)
+    {
+        driver.regPointCloudCallback(create_new_msg, write_cloud_to_file);
+    }
+    else
+    {
+        driver.regPointCloudCallback(create_new_msg, process_msg);
+    }
     driver.regExceptionCallback([this](const Error &e)
                                 { m_logger.log(AD_LOGGER::ERROR, "Lidar driver exception: %s", e.toString().c_str()); });
     if (driver.init(param))
@@ -359,6 +411,13 @@ void RS_DRIVER::start()
     {
         m_logger.log(AD_LOGGER::ERROR, "Lidar driver init failed.");
     }
+}
+
+bool should_stop_walk()
+{
+    auto cur_count = g_total_frame;
+    usleep(1000000);
+    return cur_count == g_total_frame;
 }
 
 AD_INI_CONFIG *get_ini_config()

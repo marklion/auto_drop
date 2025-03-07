@@ -10,5 +10,17 @@ int main(int argc, char const *argv[])
         driver->start();
         driver->start_driver_daemon(argc, argv);
     }
+    else if (argc == 2)
+    {
+        auto driver = std::make_shared<RS_DRIVER>("");
+        driver->start(argv[1]);
+        while (true)
+        {
+            if (should_stop_walk())
+            {
+                break;
+            }
+        }
+    }
     return 0;
 }
