@@ -20,10 +20,34 @@ static std::mutex g_rd_result_mutex;
 typedef pcl::PointXYZRGB myPoint;
 typedef pcl::PointCloud<myPoint> myPointCloud;
 typedef PointCloudT<myPoint> pcMsg;
-
+static void save_ply(myPointCloud::Ptr cloud, const std::string &_filename = "")
+{
+    static int file_no = 0;
+    auto file_name = _filename;
+    if (_filename.empty())
+    {
+        file_name = "/tmp/ply/file_" + std::to_string(file_no++) + ".ply";
+    }
+    boost::filesystem::path dir = boost::filesystem::path(file_name).parent_path();
+    if (!boost::filesystem::exists(dir))
+    {
+        boost::filesystem::create_directories(dir);
+    }
+    pcl::io::savePLYFileASCII(file_name, *cloud);
+}
 static std::shared_ptr<pcMsg> create_new_msg()
 {
-    return std::make_shared<pcMsg>();
+    static int inter = 0;
+    inter++;
+    if (inter == 15)
+    {
+        inter = 0;
+        return std::make_shared<pcMsg>();
+    }
+    else
+    {
+        return nullptr;
+    }
 }
 static void split_cloud_by_pt(myPointCloud::Ptr _cloud, const std::string &_field, float _min, float _max, myPointCloud::Ptr &_cloud_filtered, myPointCloud::Ptr &_cloud_last)
 {
@@ -101,26 +125,29 @@ static std::pair<myPoint, myPoint> get_key_seg(myPointCloud::Ptr _cloud, float l
         y_bar += point.y;
     }
     max_z_point.y = y_bar / _cloud->points.size();
-    float x0_z = std::numeric_limits<float>::lowest();
-    float x1_z = std::numeric_limits<float>::lowest();
-    float x2_z = std::numeric_limits<float>::lowest();
 
-    for (const auto &point : _cloud->points)
+    float all_z[30];
+    for (int i = 0; i < sizeof(all_z) / sizeof(float); i++)
     {
-        if (std::abs(point.x) < line_distance_threshold && point.z > x0_z)
+        all_z[i] = std::numeric_limits<float>::lowest();
+    }
+
+    for (int i = 0; i < sizeof(all_z) / sizeof(float); i++)
+    {
+        for (const auto &point : _cloud->points)
         {
-            x0_z = point.z;
-        }
-        if (std::abs(point.x - x_max) < line_distance_threshold && point.z > x1_z)
-        {
-            x1_z = point.z;
-        }
-        if (std::abs(point.x - x_min) < line_distance_threshold && point.z > x2_z)
-        {
-            x2_z = point.z;
+            if (std::abs(point.x - (x_min + (x_max - x_min) * i / (sizeof(all_z) / sizeof(float)))) < line_distance_threshold && point.z > all_z[i])
+            {
+                all_z[i] = point.z;
+            }
         }
     }
-    max_z_point.z = (x0_z + x1_z + x2_z) / 3;
+    float total_z = 0;
+    for (int i = 0; i < sizeof(all_z) / sizeof(float); i++)
+    {
+        total_z += all_z[i];
+    }
+    max_z_point.z = total_z / (sizeof(all_z) / sizeof(float));
     max_z_point.x = 0;
 
     max_z_point.z += _full_z_offset;
@@ -167,9 +194,29 @@ static std::pair<myPoint, myPoint> get_key_seg(myPointCloud::Ptr _cloud, float l
 
     return std::make_pair(begin, end);
 }
+static void insert_several_points(myPointCloud::Ptr _cloud, const myPoint &p1, const myPoint &p2)
+{
+    _cloud->points.push_back(p1);
+    for (int i = 1; i <= 100; ++i)
+    {
+        float t = static_cast<float>(i) / (100 + 1);
+        myPoint p;
+        p.x = p1.x + t * (p2.x - p1.x);
+        p.y = p1.y + t * (p2.y - p1.y);
+        p.z = p1.z + t * (p2.z - p1.z);
+        p.r = 127;
+        p.b = 255;
+        p.g = 100;
+        _cloud->points.push_back(p);
+    }
+    _cloud->points.push_back(p2);
+}
+static myPointCloud::Ptr g_cur_cloud;
 static void pc_get_state(myPointCloud::Ptr _cloud)
 {
     vehicle_rd_detect_result ret;
+    ret.is_full = false;
+    ret.state = vehicle_position_detect_state::vehicle_postion_out;
     const std::string config_sec = "get_state";
 
     auto x_min = atof(get_ini_config()->get_config(config_sec, "x_min", "0").c_str());
@@ -205,6 +252,8 @@ static void pc_get_state(myPointCloud::Ptr _cloud)
     {
         auto ex = key_seg.first.x;
         auto bx = key_seg.second.x;
+        AD_LOGGER tmp_logger("LIDAR");
+        tmp_logger.log("ex:%f, bx:%f", ex, bx);
         if (ex <= E0 && bx >= B_0 && bx <= B1)
         {
             ret.state = vehicle_position_detect_state::vehicle_postion_begin;
@@ -243,6 +292,13 @@ static void pc_get_state(myPointCloud::Ptr _cloud)
             RS_DEBUG << "points on line:" << full_detect_count << RS_REND;
         }
     }
+    insert_several_points(cloud_last, key_seg.first, key_seg.second);
+    *cloud_last += *cloud_filtered;
+    {
+        std::lock_guard<std::mutex> lock(g_rd_result_mutex);
+        g_cur_cloud = cloud_last;
+    }
+
     save_detect_result(ret);
 }
 static void pc_range_filter(myPointCloud::Ptr cloud)
@@ -279,8 +335,10 @@ static void pc_range_filter(myPointCloud::Ptr cloud)
     myPointCloud::Ptr cloud_filtered_z(new myPointCloud);
     pass_z.filter(*cloud_filtered_z);
 
+    // save_ply(cloud_filtered_z);
     pc_get_state(cloud_filtered_z);
 }
+
 static void pc_transform(myPointCloud::Ptr cloud)
 {
     const std::string config_sec = "transform";
@@ -297,49 +355,54 @@ static void pc_transform(myPointCloud::Ptr cloud)
     myPointCloud::Ptr tmp = cloud;
 
     pcl::transformPointCloud(*tmp, *ret, transform);
-
     pc_range_filter(ret);
 }
 static int g_total_frame = 0;
 static void write_cloud_to_file(std::shared_ptr<pcMsg> msg)
 {
-    myPointCloud::Ptr one_frame(new myPointCloud);
-    for (size_t i = 0; i < msg->points.size(); i++)
+    if (msg)
     {
-        myPoint tmp;
-        tmp.x = msg->points[i].x;
-        tmp.y = msg->points[i].y;
-        tmp.z = msg->points[i].z;
-        tmp.r = 255;
-        tmp.g = 255;
-        tmp.b = 255;
-        one_frame->push_back(tmp);
+        myPointCloud::Ptr one_frame(new myPointCloud);
+        for (size_t i = 0; i < msg->points.size(); i++)
+        {
+            myPoint tmp;
+            tmp.x = msg->points[i].x;
+            tmp.y = msg->points[i].y;
+            tmp.z = msg->points[i].z;
+            tmp.r = 255;
+            tmp.g = 255;
+            tmp.b = 255;
+            one_frame->push_back(tmp);
+        }
+        save_ply(one_frame);
+        g_total_frame++;
     }
-    static int file_no = 0;
-    std::string file_name = "/tmp/ply/file_" + std::to_string(file_no++) + ".ply";
-    boost::filesystem::path dir = boost::filesystem::path(file_name).parent_path();
-    if (!boost::filesystem::exists(dir))
-    {
-        boost::filesystem::create_directories(dir);
-    }
-    pcl::io::savePLYFileASCII(file_name, *one_frame);
-    g_total_frame++;
 }
 static void process_msg(std::shared_ptr<pcMsg> msg)
 {
-    myPointCloud::Ptr one_frame(new myPointCloud);
-    for (size_t i = 0; i < msg->points.size(); i++)
+    if (msg)
     {
-        myPoint tmp;
-        tmp.x = msg->points[i].x;
-        tmp.y = msg->points[i].y;
-        tmp.z = msg->points[i].z;
-        tmp.r = 255;
-        tmp.g = 255;
-        tmp.b = 255;
-        one_frame->push_back(tmp);
+        myPointCloud::Ptr one_frame(new myPointCloud);
+        for (size_t i = 0; i < msg->points.size(); i++)
+        {
+            myPoint tmp;
+            tmp.x = msg->points[i].x;
+            tmp.y = msg->points[i].y;
+            tmp.z = msg->points[i].z;
+            tmp.r = 255;
+            tmp.g = 255;
+            tmp.b = 255;
+            one_frame->push_back(tmp);
+        }
+        struct timeval tv;
+        gettimeofday(&tv, nullptr);
+        long long current_microseconds = tv.tv_sec * 1000000LL + tv.tv_usec;
+        pc_transform(one_frame);
+        gettimeofday(&tv, nullptr);
+        long long after_microseconds = tv.tv_sec * 1000000LL + tv.tv_usec;
+        AD_LOGGER tmp_logger("LIDAR");
+        tmp_logger.log("take %ld us", after_microseconds-current_microseconds);
     }
-    pc_transform(one_frame);
 }
 
 RS_DRIVER::RS_DRIVER(const std::string &_config_file) : common_driver("RD_DRIVER")
@@ -388,6 +451,8 @@ void RS_DRIVER::start(const std::string &_file, int _interval_sec)
     {
         driver.regPointCloudCallback(create_new_msg, process_msg);
     }
+    g_rd_result.state = vehicle_position_detect_state::vehicle_postion_out;
+    g_rd_result.is_full = false;
     driver.regExceptionCallback([this](const Error &e)
                                 { m_logger.log(AD_LOGGER::ERROR, "Lidar driver exception: %s", e.toString().c_str()); });
     if (driver.init(param))
@@ -413,6 +478,13 @@ void RS_DRIVER::start(const std::string &_file, int _interval_sec)
     }
 }
 
+void RS_DRIVER::save_ply_file(std::string &_return)
+{
+    _return = "/database/cur.ply";
+    std::lock_guard<std::mutex> lock(g_rd_result_mutex);
+    save_ply(g_cur_cloud, _return);
+}
+
 bool should_stop_walk()
 {
     auto cur_count = g_total_frame;
@@ -428,6 +500,8 @@ AD_INI_CONFIG *get_ini_config()
 void save_detect_result(const vehicle_rd_detect_result &result)
 {
     std::lock_guard<std::mutex> lock(g_rd_result_mutex);
+    AD_LOGGER tmp_log("LIDAR");
+    tmp_log.log(AD_LOGGER::INFO, "save_detect_result: %d %d", result.state, result.is_full);
     g_rd_result = result;
 }
 

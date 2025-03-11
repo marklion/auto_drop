@@ -368,6 +368,39 @@ void reset_sm(std::ostream &out, std::vector<std::string> _params)
     }
 }
 
+static void save_ply(std::ostream &out, std::vector<std::string> _params)
+{
+    auto check_ret = common_cli::check_params(_params, 0, "设备名");
+    if (check_ret.empty())
+    {
+        auto dev_list = get_run_dev();
+        u16 port = 0;
+        for (const auto &dev : dev_list)
+        {
+            if (dev.device_name == _params[0])
+            {
+                port = dev.port;
+                break;
+            }
+        }
+        if (port > 0)
+        {
+            AD_RPC_SC::get_instance()->call_remote<driver_serviceClient>(
+                port,
+                "driver_service",
+                [&](driver_serviceClient &client) {
+                    std::string ret;
+                    client.save_ply_file(ret);
+                    out << ret << std::endl;
+                });
+        }
+    }
+    else
+    {
+        out << check_ret << std::endl;
+    }
+}
+
 static std::unique_ptr<cli::Menu> make_runtime_menu()
 {
     std::unique_ptr<cli::Menu> sm_menu(new cli::Menu("runtime"));
@@ -378,6 +411,7 @@ static std::unique_ptr<cli::Menu> make_runtime_menu()
     sm_menu->Insert(CLI_MENU_ITEM(disable_log), "取消日志", {"模块", "日志级别"});
     sm_menu->Insert(CLI_MENU_ITEM(open_log), "打开日志");
     sm_menu->Insert(CLI_MENU_ITEM(close_log), "关闭日志");
+    sm_menu->Insert(CLI_MENU_ITEM(save_ply), "保存点云", {"设备名"});
     sm_menu->Insert(CLI_MENU_ITEM(reset_sm), "重置状态机");
     return sm_menu;
 }

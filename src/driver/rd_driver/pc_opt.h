@@ -34,6 +34,9 @@ public:
     {
         return;
     }
+
+    virtual void save_ply_file(std::string &_return);
+
 };
 
 AD_INI_CONFIG *get_ini_config();

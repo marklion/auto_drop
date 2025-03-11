@@ -45,7 +45,7 @@ start_docker_con() {
     then
         MOUNT_PROC_ARG='-v /proc:/host/proc'
     fi
-    local CON_ID=`docker create --privileged ${MOUNT_PROC_ARG} -p ${PORT_INPUT}:80 -v ${DATA_DIR_INPUT}:/database --restart=always  ${DOCKER_IMG_NAME} /root/install.sh`
+    local CON_ID=`docker create --privileged ${MOUNT_PROC_ARG} -p ${PORT_INPUT}:80 -p 6699:6699/udp -p 7788:7788/udp -v ${DATA_DIR_INPUT}:/database --restart=always  ${DOCKER_IMG_NAME} /root/install.sh`
     docker cp $0 ${CON_ID}:/root/ > /dev/null 2>&1
     docker start ${CON_ID} > /dev/null 2>&1
     echo ${CON_ID}
