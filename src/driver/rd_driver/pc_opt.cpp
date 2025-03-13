@@ -83,18 +83,17 @@ static myPointCloud::Ptr find_points_on_plane(myPointCloud::Ptr _cloud, const Ei
         itr.b = 255;
     }
 
-    for (auto &itr : one_plane->indices)
-    {
-        _cloud->points[itr].r = 255;
-        _cloud->points[itr].g = (_ax_vec.y() > 0 ? 255 : 0);
-        _cloud->points[itr].b = 0;
-    }
-
     pcl::ExtractIndices<myPoint> extract;
     extract.setInputCloud(_cloud);
     extract.setIndices(one_plane);
     extract.setNegative(false);
     extract.filter(*ret);
+    for (auto &itr : ret->points)
+    {
+        itr.r = 255;
+        itr.g = 255;
+        itr.b = 0;
+    }
 
     return ret;
 }
@@ -194,7 +193,7 @@ static std::pair<myPoint, myPoint> get_key_seg(myPointCloud::Ptr _cloud, float l
 
     return std::make_pair(begin, end);
 }
-static void insert_several_points(myPointCloud::Ptr _cloud, const myPoint &p1, const myPoint &p2)
+static void insert_several_points(myPointCloud::Ptr _cloud, const myPoint &p1, const myPoint &p2, bool _is_red = false)
 {
     _cloud->points.push_back(p1);
     for (int i = 1; i <= 100; ++i)
@@ -207,6 +206,12 @@ static void insert_several_points(myPointCloud::Ptr _cloud, const myPoint &p1, c
         p.r = 127;
         p.b = 255;
         p.g = 100;
+        if (_is_red)
+        {
+            p.r = 255;
+            p.b = 0;
+            p.g = 0;
+        }
         _cloud->points.push_back(p);
     }
     _cloud->points.push_back(p2);
@@ -226,7 +231,6 @@ static void pc_get_state(myPointCloud::Ptr _cloud)
     auto plane_DistanceThreshold = atof(get_ini_config()->get_config(config_sec, "plane_DistanceThreshold", "0.1").c_str());
     auto line_DistanceThreshold = atof(get_ini_config()->get_config(config_sec, "line_DistanceThreshold", "0.1").c_str());
     auto AngleThreshold = atof(get_ini_config()->get_config(config_sec, "AngleThreshold", "0.1").c_str());
-    auto alpha = atof(get_ini_config()->get_config(config_sec, "alpha", "0.1").c_str());
     auto E0 = atof(get_ini_config()->get_config(config_sec, "E0", "0.1").c_str());
     auto E1 = atof(get_ini_config()->get_config(config_sec, "E1", "0.1").c_str());
     auto B_0 = atof(get_ini_config()->get_config(config_sec, "B0", "0.1").c_str());
@@ -247,7 +251,7 @@ static void pc_get_state(myPointCloud::Ptr _cloud)
 
     pcl::ModelCoefficients::Ptr coe_side(new pcl::ModelCoefficients);
     auto side_points = find_points_on_plane(cloud_filtered, Eigen::Vector3f(0, 1, 0), plane_DistanceThreshold, AngleThreshold, coe_side);
-    auto key_seg = get_key_seg(side_points, line_DistanceThreshold, plane_DistanceThreshold, full_y_offset, full_z_offset);
+    auto key_seg = get_key_seg(side_points, line_DistanceThreshold, plane_DistanceThreshold, 0, full_z_offset);
     if (key_seg.first.x != key_seg.second.x)
     {
         auto ex = key_seg.first.x;
@@ -273,10 +277,23 @@ static void pc_get_state(myPointCloud::Ptr _cloud)
         ret.is_full = false;
         if (ret.state != vehicle_position_detect_state::vehicle_postion_out)
         {
+            myPointCloud::Ptr focus_side = myPointCloud::Ptr(new myPointCloud);
+            for (auto &itr : side_points->points)
+            {
+                if (itr.x < key_seg.second.x)
+                {
+                    focus_side->points.push_back(itr);
+                    itr.g = 255;
+                    itr.r = 0;
+                    itr.b = 0;
+                }
+            }
+            auto full_seg = get_key_seg(focus_side, line_DistanceThreshold, plane_DistanceThreshold, full_y_offset, full_z_offset);
+            insert_several_points(cloud_last, full_seg.first, full_seg.second, true);
             long full_detect_count = 0;
             for (auto &itr : cloud_filtered->points)
             {
-                if (itr.x > E1 && itr.x < B_0 && plane_DistanceThreshold > pointToLineDistance(itr.getVector3fMap(), key_seg.first.getVector3fMap(), Eigen::Vector3f(1, 0, 0)))
+                if (itr.x > E1 && itr.x < B_0 && plane_DistanceThreshold > pointToLineDistance(itr.getVector3fMap(), full_seg.first.getVector3fMap(), Eigen::Vector3f(1, 0, 0)))
                 {
                     full_detect_count++;
                 }
@@ -289,11 +306,11 @@ static void pc_get_state(myPointCloud::Ptr _cloud)
             {
                 ret.is_full = false;
             }
-            RS_DEBUG << "points on line:" << full_detect_count << RS_REND;
+            tmp_logger.log("full_detect_count:%ld", full_detect_count);
         }
     }
     insert_several_points(cloud_last, key_seg.first, key_seg.second);
-    *cloud_last += *cloud_filtered;
+    *cloud_last += *side_points;
     {
         std::lock_guard<std::mutex> lock(g_rd_result_mutex);
         g_cur_cloud = cloud_last;
