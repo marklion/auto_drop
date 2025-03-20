@@ -47,7 +47,16 @@ void AD_REDIS_HELPER::set(const std::string &key, const std::string &value)
     auto rc = prepare_redis();
     if (rc)
     {
-        auto cmd_reply = (redisReply *)redisCommand(rc, "SET %s %s", key.c_str(), value.c_str());
+        auto self_serial = getenv("SELF_SERIAL");
+        std::string ser_key = "appliance:";
+        ser_key += self_serial;
+        const char *cmd_argv[] = {
+            "HSET",
+            ser_key.c_str(),
+            key.c_str(),
+            value.c_str(),
+        };
+        auto cmd_reply = (redisReply *)redisCommandArgv(rc, sizeof(cmd_argv) / sizeof(char *), cmd_argv, nullptr);
         if (cmd_reply->type == REDIS_REPLY_ERROR)
         {
             m_logger.log(AD_LOGGER::ERROR, "Redis set error: %s\n", cmd_reply->str);
@@ -64,7 +73,15 @@ std::string AD_REDIS_HELPER::get(const std::string &key)
     auto rc = prepare_redis();
     if (rc)
     {
-        auto cmd_reply = (redisReply *)redisCommand(rc, "GET %s", key.c_str());
+        auto self_serial = getenv("SELF_SERIAL");
+        std::string ser_key = "appliance:";
+        ser_key += self_serial;
+        const char *cmd_argv[] = {
+            "HGET",
+            ser_key.c_str(),
+            key.c_str(),
+        };
+        auto cmd_reply = (redisReply *)redisCommandArgv(rc, sizeof(cmd_argv) / sizeof(char *), cmd_argv, nullptr);
         if (cmd_reply->type == REDIS_REPLY_STRING)
         {
             ret = cmd_reply->str;
