@@ -7,6 +7,7 @@
 #include "sm_config.h"
 #include "device_config.h"
 #include "runtime_config.h"
+#include "redis_config.h"
 
 static std::string insert_spaces(const std::string &_str)
 {
@@ -24,7 +25,7 @@ int un_safe_main(int argc, char const *argv[])
 {
     AD_LOGGER::set_global_log_level(AD_LOGGER::ERROR);
     common_cli *sub_c[] = {
-        new DEVICE_CONFIG_CLI(), new SM_CONFIG_CLI(), new RUNTIME_CONFIG_CLI()};
+        new DEVICE_CONFIG_CLI(), new SM_CONFIG_CLI(), new RUNTIME_CONFIG_CLI(), new REDIS_CONFIG_CLI()};
     auto root_menu = std::unique_ptr<cli::Menu>(new cli::Menu("ad"));
     for (auto &itr : sub_c)
     {
@@ -80,7 +81,6 @@ int un_safe_main(int argc, char const *argv[])
             system("/bin/bash");
             tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
         });
-
     cli::LoopScheduler *plsc = nullptr;
     cli::Cli cli(std::move(root_menu));
     cli.ExitAction(
