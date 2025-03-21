@@ -5,6 +5,7 @@
 #include "gen_code/cpp/config_management.h"
 #include "gen_code/cpp/driver_service.h"
 #include "../public/const_var_define.h"
+#include "../public/utils/CJsonObject.hpp"
 
 class my_rpc_trans : public AD_EVENT_SC_TCP_DATA_NODE
 {
@@ -103,4 +104,36 @@ std::string ad_rpc_device_save_ply(const std::string &dev_name)
     }
 
     return ret;
+}
+
+std::string ad_rpc_get_current_state()
+{
+    neb::CJsonObject json_obj;
+    AD_RPC_SC::get_instance()->call_remote<driver_serviceClient>(
+        ad_rpc_get_specific_dev_port(AD_CONST_RIDAR_DEVICE_NAME),
+        "driver_service",
+        [&](driver_serviceClient &client)
+        {
+            vehicle_rd_detect_result rd_result;
+            client.vehicle_rd_detect(rd_result);
+            json_obj.Add(AD_CONST_REDIS_KEY_RD_POSITION, rd_result.state);
+            json_obj.Add(AD_CONST_REDIS_KEY_RD_FULL, rd_result.is_full);
+        });
+
+    AD_RPC_SC::get_instance()->call_remote<driver_serviceClient>(
+        ad_rpc_get_specific_dev_port(AD_CONST_SCALE_DEVICE_NAME),
+        "driver_service",
+        [&](driver_serviceClient &client)
+        {
+            json_obj.Add(AD_CONST_REDIS_KEY_SCALE, client.get_scale_weight());
+        });
+    AD_RPC_SC::get_instance()->call_remote<driver_serviceClient>(
+        ad_rpc_get_specific_dev_port(AD_CONST_LC_DEVICE_NAME),
+        "driver_service",
+        [&](driver_serviceClient &client)
+        {
+            json_obj.Add(AD_CONST_REDIS_KEY_LC_OPEN_THRESHOLD, client.get_lc_open());
+        });
+
+    return json_obj.ToString();
 }

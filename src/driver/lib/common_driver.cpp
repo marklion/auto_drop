@@ -85,3 +85,13 @@ bool common_driver::vehicle_passed_gate()
 {
     return m_gate_is_close;
 }
+
+int32_t common_driver::get_lc_open()
+{
+    return m_lc_open_threshold;
+}
+
+double common_driver::get_scale_weight()
+{
+    return m_current_weight;
+}

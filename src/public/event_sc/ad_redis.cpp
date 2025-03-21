@@ -1,5 +1,6 @@
 #include "ad_redis.h"
 #include "../hiredis/hiredis.h"
+#include "../const_var_define.h"
 extern "C"
 {
 #include "../hiredis/net.h"
@@ -47,7 +48,7 @@ void AD_REDIS_HELPER::set(const std::string &key, const std::string &value)
     auto rc = prepare_redis();
     if (rc)
     {
-        auto self_serial = getenv("SELF_SERIAL");
+        auto self_serial = getenv(AD_CONST_SELF_SERIAL);
         std::string ser_key = "appliance:";
         ser_key += self_serial;
         const char *cmd_argv[] = {
@@ -73,7 +74,7 @@ std::string AD_REDIS_HELPER::get(const std::string &key)
     auto rc = prepare_redis();
     if (rc)
     {
-        auto self_serial = getenv("SELF_SERIAL");
+        auto self_serial = getenv(AD_CONST_SELF_SERIAL);
         std::string ser_key = "appliance:";
         ser_key += self_serial;
         const char *cmd_argv[] = {

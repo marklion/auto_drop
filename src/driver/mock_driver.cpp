@@ -77,6 +77,13 @@ public:
     {
         return true;
     }
+
+    virtual void set_lc_open(const int32_t thredhold) {
+        AD_EVENT_SC_TIMER_NODE_PTR timer = AD_RPC_SC::get_instance()->startTimer(2, [&]() {
+            AD_RPC_SC::get_instance()->stopTimer(timer);
+            common_driver::set_lc_open(thredhold);
+        });
+    }
 };
 
 int main(int argc, char const *argv[])
