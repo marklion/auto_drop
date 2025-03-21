@@ -720,7 +720,8 @@ static redisContext *redisContextInit(void) {
     if (c == NULL)
         return NULL;
 
-    c->funcs = &redisContextDefaultFuncs;
+    c->funcs = hi_calloc(1, sizeof(*c->funcs));
+    memcpy(c->funcs, &redisContextDefaultFuncs, sizeof(*c->funcs));
 
     c->obuf = sdsempty();
     c->reader = redisReaderCreate();
@@ -750,6 +751,7 @@ void redisFree(redisContext *c) {
     hi_free(c->connect_timeout);
     hi_free(c->command_timeout);
     hi_free(c->saddr);
+    hi_free(c->funcs);
 
     if (c->privdata && c->free_privdata)
         c->free_privdata(c->privdata);

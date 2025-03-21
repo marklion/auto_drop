@@ -6,13 +6,14 @@ SET(EXECUTABLE_OUTPUT_PATH ${PRJ_INTERNAL_BUILD}/bin)
 add_compile_options(-std=gnu++14 -g)
 
 aux_source_directory(rpc_imp_lib/ LIB_SRC)
+aux_source_directory(action/ ACTION_SRC)
 
 find_package(yaml-cpp REQUIRED)
 find_package(Lua REQUIRED)
 
 add_executable(core_daemon main.cpp)
 add_executable(sm_daemon sm_main.cpp)
-add_library(ad_core SHARED ${LIB_SRC})
+add_library(ad_core SHARED ${LIB_SRC} ${ACTION_SRC})
 
 find_library(SM_LIB libsm.so ${PRJ_INTERNAL_BUILD}/lib)
 find_library(AD_UTILS_LIB libad_utils.so ${PRJ_INTERNAL_BUILD}/lib)

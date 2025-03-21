@@ -183,5 +183,9 @@ public:
         return 0;
     }
 };
+std::vector<device_config> ad_rpc_get_run_dev();
+u16 ad_rpc_get_specific_dev_port(const std::string &dev_name);
+std::vector<sm_config> ad_rpc_get_run_sm();
+std::string ad_rpc_device_save_ply(const std::string &dev_name);
 
 #endif // _AD_RPC_H_

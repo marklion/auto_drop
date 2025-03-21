@@ -5,6 +5,19 @@
 #include "../utils/ad_utils.h"
 #include <yaml-cpp/yaml.h>
 
+typedef std::function<void(const std::string &)> REDIS_SUBSCRIBED_CALLBACK;
+class AD_REDIS_EVENT_NODE:public AD_EVENT_SC_NODE{
+    redisContext *m_redis = nullptr;
+    AD_LOGGER m_logger;
+    std::map<std::string, REDIS_SUBSCRIBED_CALLBACK> m_subscribed_callbacks;
+public:
+    AD_REDIS_EVENT_NODE(YAML::Node &config, AD_EVENT_SC_PTR _sc);
+    virtual ~AD_REDIS_EVENT_NODE();
+    virtual int getFd() const override;
+    virtual void handleEvent() override;
+    void register_subscribed_callback(const std::string &channel, REDIS_SUBSCRIBED_CALLBACK callback);
+};
+
 class AD_REDIS_HELPER
 {
     std::string m_host;
@@ -12,8 +25,8 @@ class AD_REDIS_HELPER
     std::string m_password;
     AD_LOGGER m_logger;
     AD_EVENT_SC_PTR m_event_sc;
-    redisContext *prepare_redis();
 public:
+    redisContext *prepare_redis();
     AD_REDIS_HELPER(const std::string &host, int port, const std::string &password, AD_EVENT_SC_PTR _sc) : m_logger("REDIS"), m_event_sc(_sc)
     {
         m_host = host;

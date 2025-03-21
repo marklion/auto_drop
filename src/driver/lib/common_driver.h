@@ -23,7 +23,9 @@ public:
     int start_driver_daemon(int argc, char const *argv[]);
     void emit_event(const std::string &_event);
     virtual bool running_status_check() = 0;
-    virtual void save_ply_file(std::string &_return) {}
+    virtual void save_ply_file(std::string &_return) {
+        _return = "mocked_ply_file.ply";
+    }
 
     virtual void get_trigger_vehicle_plate(std::string &_return) override final;
     virtual void vehicle_rd_detect(vehicle_rd_detect_result &_return) override final;

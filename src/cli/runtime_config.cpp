@@ -9,37 +9,10 @@
 #include <unistd.h>
 #include <sys/inotify.h>
 
-
-static std::vector<device_config> get_run_dev()
-{
-    std::vector<device_config> dev_list;
-    AD_RPC_SC::get_instance()->call_remote<config_managementClient>(
-        AD_CONST_CONFIG_LISTEN_PORT,
-        "config_management",
-        [&](config_managementClient &client)
-        {
-            client.get_device_list(dev_list);
-        });
-    return dev_list;
-}
-
-static std::vector<sm_config> get_run_sm()
-{
-    std::vector<sm_config> sm_list;
-    AD_RPC_SC::get_instance()->call_remote<config_managementClient>(
-        AD_CONST_CONFIG_LISTEN_PORT,
-        "config_management",
-        [&](config_managementClient &client)
-        {
-            client.get_sm_list(sm_list);
-        });
-    return sm_list;
-}
-
 static void restart(std::ostream &out, std::vector<std::string> _params)
 {
-    auto dev_list = get_run_dev();
-    auto sm_list = get_run_sm();
+    auto dev_list = ad_rpc_get_run_dev();
+    auto sm_list = ad_rpc_get_run_sm();
     for (auto &dev : dev_list)
     {
         AD_RPC_SC::get_instance()->call_remote<config_managementClient>(
@@ -121,7 +94,7 @@ static void restart(std::ostream &out, std::vector<std::string> _params)
 
 static void list(std::ostream &out, std::vector<std::string> _params)
 {
-    auto dev_list = get_run_dev();
+    auto dev_list = ad_rpc_get_run_dev();
     for (const auto &dev : dev_list)
     {
         out << "设备名称:" << dev.device_name << "端口:" << dev.port << " 驱动名称:" << dev.driver_name << " 参数:";
@@ -131,7 +104,7 @@ static void list(std::ostream &out, std::vector<std::string> _params)
         }
         out << std::endl;
     }
-    auto sm_list = get_run_sm();
+    auto sm_list = ad_rpc_get_run_sm();
     for (const auto &sm : sm_list)
     {
         out << "sm名称:" << sm.sm_name << "端口:" << sm.port << " 参数:";
@@ -150,16 +123,7 @@ static void mock(std::ostream &out, std::vector<std::string> _params)
     check_ret += common_cli::check_params(_params, 2, "动作效果");
     if (check_ret.empty())
     {
-        auto dev_list = get_run_dev();
-        u16 port = 0;
-        for (const auto &dev : dev_list)
-        {
-            if (dev.device_name == _params[0])
-            {
-                port = dev.port;
-                break;
-            }
-        }
+        u16 port = ad_rpc_get_specific_dev_port(_params[0]);
         if (port > 0)
         {
             AD_RPC_SC::get_instance()->call_remote<driver_serviceClient>(
@@ -350,7 +314,7 @@ static void disable_log(std::ostream &out, std::vector<std::string> _params)
 void reset_sm(std::ostream &out, std::vector<std::string> _params)
 {
     u16 sm_port = 0;
-    auto run_sm = get_run_sm();
+    auto run_sm = ad_rpc_get_run_sm();
     if (run_sm.size() > 0)
     {
         sm_port = run_sm[0].port;
@@ -373,27 +337,9 @@ static void save_ply(std::ostream &out, std::vector<std::string> _params)
     auto check_ret = common_cli::check_params(_params, 0, "设备名");
     if (check_ret.empty())
     {
-        auto dev_list = get_run_dev();
-        u16 port = 0;
-        for (const auto &dev : dev_list)
-        {
-            if (dev.device_name == _params[0])
-            {
-                port = dev.port;
-                break;
-            }
-        }
-        if (port > 0)
-        {
-            AD_RPC_SC::get_instance()->call_remote<driver_serviceClient>(
-                port,
-                "driver_service",
-                [&](driver_serviceClient &client) {
-                    std::string ret;
-                    client.save_ply_file(ret);
-                    out << ret << std::endl;
-                });
-        }
+        std::string ret;
+        ret = ad_rpc_device_save_ply(_params[0]);
+        out << ret << std::endl;
     }
     else
     {

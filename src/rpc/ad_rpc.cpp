@@ -2,6 +2,9 @@
 #include <thrift/transport/TBufferTransports.h>
 #include <thrift/processor/TMultiplexedProcessor.h>
 #include "ad_rpc.h"
+#include "gen_code/cpp/config_management.h"
+#include "gen_code/cpp/driver_service.h"
+#include "../public/const_var_define.h"
 
 class my_rpc_trans : public AD_EVENT_SC_TCP_DATA_NODE
 {
@@ -41,3 +44,63 @@ AD_EVENT_SC_TCP_DATA_NODE_PTR AD_RPC_EVENT_NODE::create_rpc_tcp_data_node(int fd
 }
 
 std::shared_ptr<AD_RPC_SC> AD_RPC_SC::m_single;
+
+std::vector<device_config> ad_rpc_get_run_dev()
+{
+    std::vector<device_config> dev_list;
+    AD_RPC_SC::get_instance()->call_remote<config_managementClient>(
+        AD_CONST_CONFIG_LISTEN_PORT,
+        "config_management",
+        [&](config_managementClient &client)
+        {
+            client.get_device_list(dev_list);
+        });
+    return dev_list;
+}
+
+u16 ad_rpc_get_specific_dev_port(const std::string &dev_name)
+{
+    u16 ret = 0;
+    auto dev_list = ad_rpc_get_run_dev();
+    for (const auto &dev : dev_list)
+    {
+        if (dev.device_name == dev_name)
+        {
+            ret = dev.port;
+            break;
+        }
+    }
+
+    return ret;
+}
+
+std::vector<sm_config> ad_rpc_get_run_sm()
+{
+    std::vector<sm_config> sm_list;
+    AD_RPC_SC::get_instance()->call_remote<config_managementClient>(
+        AD_CONST_CONFIG_LISTEN_PORT,
+        "config_management",
+        [&](config_managementClient &client)
+        {
+            client.get_sm_list(sm_list);
+        });
+    return sm_list;
+}
+
+std::string ad_rpc_device_save_ply(const std::string &dev_name)
+{
+    std::string ret;
+    u16 port = ad_rpc_get_specific_dev_port(dev_name);
+    if (port > 0)
+    {
+        AD_RPC_SC::get_instance()->call_remote<driver_serviceClient>(
+            port,
+            "driver_service",
+            [&](driver_serviceClient &client)
+            {
+                client.save_ply_file(ret);
+            });
+    }
+
+    return ret;
+}

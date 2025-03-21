@@ -44,6 +44,7 @@ service config_management{
     sm_config start_sm(1:string sm_name, 2:list<string> argv) throws (1:ad_gen_exp exp),
     void stop_sm(1:u16 port) throws (1:ad_gen_exp exp),
     list<sm_config> get_sm_list() throws (1:ad_gen_exp exp),
+    void restart_redis_subscriber() throws (1:ad_gen_exp exp),
 }
 
 service driver_service{

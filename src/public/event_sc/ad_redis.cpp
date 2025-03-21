@@ -96,3 +96,65 @@ std::string AD_REDIS_HELPER::get(const std::string &key)
 
     return ret;
 }
+
+AD_REDIS_EVENT_NODE::AD_REDIS_EVENT_NODE(YAML::Node &config, AD_EVENT_SC_PTR _sc):m_logger("REDIS SC")
+{
+    AD_REDIS_HELPER tmp_helper(config, _sc);
+    auto rc = tmp_helper.prepare_redis();
+    if (rc)
+    {
+        m_redis = rc;
+        m_redis->funcs->read = redisNetRead;
+    }
+}
+
+AD_REDIS_EVENT_NODE::~AD_REDIS_EVENT_NODE()
+{
+    if (m_redis)
+    {
+        redisFree(m_redis);
+    }
+}
+
+int AD_REDIS_EVENT_NODE::getFd() const
+{
+    int ret = -1;
+
+    if (m_redis)
+    {
+        ret = m_redis->fd;
+    }
+
+    return ret;
+}
+
+void AD_REDIS_EVENT_NODE::handleEvent()
+{
+    redisReply *reply = nullptr;
+    if (redisGetReply(m_redis, (void **)&reply) == REDIS_OK)
+    {
+        if (reply->type == REDIS_REPLY_ARRAY)
+        {
+            if (reply->elements == 3)
+            {
+                if (reply->element[0]->type == REDIS_REPLY_STRING)
+                {
+                    auto channel = reply->element[1]->str;
+                    auto callback = m_subscribed_callbacks.find(channel);
+                    if (callback != m_subscribed_callbacks.end())
+                    {
+                        callback->second(reply->element[2]->str);
+                    }
+                }
+            }
+        }
+        freeReplyObject(reply);
+    }
+}
+
+void AD_REDIS_EVENT_NODE::register_subscribed_callback(const std::string &channel, REDIS_SUBSCRIBED_CALLBACK callback)
+{
+    auto reply = (redisReply *)redisCommand(m_redis, "SUBSCRIBE %s", channel.c_str());
+    freeReplyObject(reply);
+    m_subscribed_callbacks[channel] = callback;
+}

@@ -10,6 +10,7 @@
 #include "../../rpc/gen_code/cpp/runner_sm.h"
 #include "../../public/const_var_define.h"
 #include "rpc_wrapper.h"
+#include "../action/ad_action.h"
 
 static int create_sub_process(const std::string &_path, const std::vector<std::string> &_argv)
 {
@@ -193,5 +194,19 @@ void config_management_impl::get_sm_list(std::vector<sm_config> &_return)
     for (auto &it : m_sm_map)
     {
         _return.push_back(it.second);
+    }
+}
+
+void config_management_impl::restart_redis_subscriber()
+{
+    auto sc = AD_RPC_SC::get_instance();
+    if (m_redis_node)
+    {
+        sc->unregisterNode(m_redis_node);
+    }
+    m_redis_node = create_redis_event_node();
+    if (m_redis_node)
+    {
+        sc->registerNode(m_redis_node);
     }
 }

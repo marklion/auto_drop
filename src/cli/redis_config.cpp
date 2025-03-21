@@ -21,6 +21,13 @@ static void params(std::ostream &out, std::vector<std::string> _params)
         redis_node["port"] = std::stoi(_params[1]);
         redis_node["password"] = _params[2];
         common_cli::write_config_file(orig_node);
+        AD_RPC_SC::get_instance()->call_remote<config_managementClient>(
+            AD_CONST_CONFIG_LISTEN_PORT,
+            "config_management",
+            [&](config_managementClient &client)
+            {
+                client.restart_redis_subscriber();
+            });
     }
     else
     {
