@@ -21,6 +21,22 @@ public:
     }
 };
 
+class runner_rd_detect_result
+{
+public:
+    vehicle_position_detect_state::type state;
+    bool is_full;
+    runner_rd_detect_result(vehicle_position_detect_state::type _state, bool _is_full) : state(_state), is_full(_is_full) {}
+    int get_state() const
+    {
+        return state;
+    }
+    bool get_is_full() const
+    {
+        return is_full;
+    }
+};
+
 template <typename T>
 class RUNNER_VARIBLES
 {
@@ -62,6 +78,7 @@ class RUNNER : public DYNAMIC_SM, public RV_FATHER
     };
     std::map<std::string, uint16_t> m_device_map;
     AD_CO_MUTEX m_mutex = AD_CO_MUTEX(AD_RPC_SC::get_instance());
+
 public:
     virtual void lock_sm() override
     {
@@ -96,7 +113,8 @@ public:
     {
         rpc_wrapper_call_device(
             get_device(_dev_name),
-            [&](driver_serviceClient &client){
+            [&](driver_serviceClient &client)
+            {
                 client.voice_broadcast(_content, times);
             });
     }
@@ -104,7 +122,8 @@ public:
     {
         rpc_wrapper_call_device(
             get_device(_dev_name),
-            [&](driver_serviceClient &client){
+            [&](driver_serviceClient &client)
+            {
                 client.voice_stop();
             });
     }
@@ -112,7 +131,8 @@ public:
     {
         rpc_wrapper_call_device(
             get_device(_dev_name),
-            [&](driver_serviceClient &client){
+            [&](driver_serviceClient &client)
+            {
                 client.led_display(_content);
             });
     }
@@ -120,7 +140,8 @@ public:
     {
         rpc_wrapper_call_device(
             get_device(_dev_name),
-            [&](driver_serviceClient &client){
+            [&](driver_serviceClient &client)
+            {
                 client.led_stop();
             });
     }
@@ -128,7 +149,8 @@ public:
     {
         rpc_wrapper_call_device(
             get_device(_dev_name),
-            [&](driver_serviceClient &client){
+            [&](driver_serviceClient &client)
+            {
                 client.gate_control(is_close);
             });
     }
@@ -137,27 +159,30 @@ public:
         std::string ret;
         rpc_wrapper_call_device(
             get_device(_dev_name),
-            [&](driver_serviceClient &client){
+            [&](driver_serviceClient &client)
+            {
                 client.get_trigger_vehicle_plate(ret);
             });
         return ret;
     }
-    vehicle_rd_detect_result dev_vehicle_rd_detect(const std::string &_dev_name)
+    runner_rd_detect_result dev_vehicle_rd_detect(const std::string &_dev_name)
     {
         vehicle_rd_detect_result ret;
         rpc_wrapper_call_device(
             get_device(_dev_name),
-            [&](driver_serviceClient &client){
+            [&](driver_serviceClient &client)
+            {
                 client.vehicle_rd_detect(ret);
             });
-        return ret;
+        return runner_rd_detect_result(ret.state, ret.is_full);
     }
     bool dev_vehicle_passed_gate(const std::string &_dev_name)
     {
         bool ret = false;
         rpc_wrapper_call_device(
             get_device(_dev_name),
-            [&](driver_serviceClient &client){
+            [&](driver_serviceClient &client)
+            {
                 ret = client.vehicle_passed_gate();
             });
         return ret;
@@ -168,14 +193,16 @@ public:
         AD_EVENT_SC_TIMER_NODE_PTR ret;
         if (_func.isFunction())
         {
-            ret = m_event_sc->startTimer(_sec, [_func](){
-                _func();
-            });
+            ret = m_event_sc->startTimer(
+                _sec, [_func]()
+                { _func(); });
         }
         return ret;
     }
-    void stop_timer(AD_EVENT_SC_TIMER_NODE_PTR _timer) {
-        if (_timer) {
+    void stop_timer(AD_EVENT_SC_TIMER_NODE_PTR _timer)
+    {
+        if (_timer)
+        {
             m_event_sc->stopTimer(_timer);
         }
     }
@@ -186,6 +213,16 @@ public:
             { proc_event(_event); });
     }
     void sleep_wait(int _sec, int _micro_sec);
+    void refresh_current_state();
+    void dev_set_lc_open(const std::string &_dev_name, const int32_t _thredhold)
+    {
+        rpc_wrapper_call_device(
+            get_device(_dev_name),
+            [&](driver_serviceClient &client)
+            {
+                client.set_lc_open(_thredhold);
+            });
+    }
 
     luabridge::LuaRef call_http_api(const std::string &_url, const std::string &_method, luabridge::LuaRef _body, luabridge::LuaRef _header);
 

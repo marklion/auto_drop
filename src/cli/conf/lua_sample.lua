@@ -17,6 +17,9 @@ sm:dev_led_display(device, content) 显示LED内容
         content为显示内容字符串
 sm:dev_led_stop(device) 停止显示LED内容
     参数:device为LED设备名称
+sm:dev_set_lc_open(device, thredhold) 设定溜槽开启阈值
+    参数:device为溜槽设备名称
+        thredhold为阈值
 sm:dev_gate_control(device, is_close) 控制闸机
     参数:device为闸机设备名称
         is_close为true时关闭闸机，false时打开闸机
@@ -42,6 +45,9 @@ sm:call_http_api(url, method, body, header) 调用外部的http接口
 sm:sleep_wait(sec, micro_sec) 睡眠等待
     参数:sec为秒数
         micro_sec为微秒数
+
+sm:refresh_current_state() 刷新当前状态,刷新后，外部系统可获取到当前业务状态
+
 print_log(log) 打印日志
     参数:log为日志内容
 举例1：

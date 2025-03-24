@@ -65,9 +65,11 @@ public:
         if (!WIFEXITED(status))
         {
             m_logger.log(AD_LOGGER::ERROR, "subprocess %s exit with code %d", m_name.c_str(), WEXITSTATUS(status));
+            AD_RPC_SC::get_instance()->yield_by_timer(2);
             auto new_pid  = create_sub_process(m_path, m_argv);
             close(m_fd);
             m_fd = syscall(SYS_pidfd_open, new_pid, 0);
+            m_pid = new_pid;
             AD_RPC_SC::get_instance()->registerNode(shared_from_this());
         }
     }

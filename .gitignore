@@ -2,3 +2,4 @@
 **/build/
 **/cmake_tmp_dir/
 **/*gen_code/
+**/node_modules/

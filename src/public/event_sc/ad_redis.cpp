@@ -22,15 +22,22 @@ redisContext *AD_REDIS_HELPER::prepare_redis()
             rc->m_event_sc = m_event_sc.get();
             rc->funcs->read = my_redis_read;
             auto auth_reply = (redisReply *)redisCommand(rc, "AUTH %s", m_password.c_str());
-            if (auth_reply->type != REDIS_REPLY_ERROR)
+            if (auth_reply)
             {
-                ret = rc;
+                if (auth_reply->type != REDIS_REPLY_ERROR)
+                {
+                    ret = rc;
+                }
+                else
+                {
+                    m_logger.log(AD_LOGGER::ERROR, "Redis auth error: %s\n", auth_reply->str);
+                }
+                freeReplyObject(auth_reply);
             }
             else
             {
-                m_logger.log(AD_LOGGER::ERROR, "Redis auth error: %s\n", auth_reply->str);
+                m_logger.log(AD_LOGGER::ERROR, "Connection error: %s\n", rc->errstr);
             }
-            freeReplyObject(auth_reply);
         }
         else
         {
@@ -58,11 +65,19 @@ void AD_REDIS_HELPER::set(const std::string &key, const std::string &value)
             value.c_str(),
         };
         auto cmd_reply = (redisReply *)redisCommandArgv(rc, sizeof(cmd_argv) / sizeof(char *), cmd_argv, nullptr);
-        if (cmd_reply->type == REDIS_REPLY_ERROR)
+        if (cmd_reply)
         {
-            m_logger.log(AD_LOGGER::ERROR, "Redis set error: %s\n", cmd_reply->str);
+            if (cmd_reply->type == REDIS_REPLY_ERROR)
+            {
+                m_logger.log(AD_LOGGER::ERROR, "Redis set error: %s\n", cmd_reply->str);
+            }
+            freeReplyObject(cmd_reply);
         }
-        freeReplyObject(cmd_reply);
+        else
+        {
+            m_logger.log(AD_LOGGER::ERROR, "Redis set error: %s\n", rc->errstr);
+        }
+
         redisFree(rc);
     }
 }
@@ -83,22 +98,55 @@ std::string AD_REDIS_HELPER::get(const std::string &key)
             key.c_str(),
         };
         auto cmd_reply = (redisReply *)redisCommandArgv(rc, sizeof(cmd_argv) / sizeof(char *), cmd_argv, nullptr);
-        if (cmd_reply->type == REDIS_REPLY_STRING)
+        if (cmd_reply)
         {
-            ret = cmd_reply->str;
+            if (cmd_reply->type == REDIS_REPLY_STRING)
+            {
+                ret = cmd_reply->str;
+            }
+            else if (cmd_reply->type == REDIS_REPLY_ERROR)
+            {
+                m_logger.log(AD_LOGGER::ERROR, "Redis get error: %s\n", cmd_reply->str);
+            }
+            freeReplyObject(cmd_reply);
         }
-        else if (cmd_reply->type == REDIS_REPLY_ERROR)
+        else
         {
-            m_logger.log(AD_LOGGER::ERROR, "Redis get error: %s\n", cmd_reply->str);
+            m_logger.log(AD_LOGGER::ERROR, "Redis get error: %s\n", rc->errstr);
         }
-        freeReplyObject(cmd_reply);
+
         redisFree(rc);
     }
 
     return ret;
 }
 
-AD_REDIS_EVENT_NODE::AD_REDIS_EVENT_NODE(YAML::Node &config, AD_EVENT_SC_PTR _sc):m_logger("REDIS SC")
+void AD_REDIS_HELPER::pub(const std::string &channel, const std::string &msg)
+{
+    auto rc = prepare_redis();
+    if (rc)
+    {
+        auto self_serial = getenv(AD_CONST_SELF_SERIAL);
+        auto real_channel = channel + self_serial;
+        auto cmd_reply = (redisReply *)redisCommand(rc, "PUBLISH %s %s", real_channel.c_str(), msg.c_str());
+        if (cmd_reply)
+        {
+            if (cmd_reply->type == REDIS_REPLY_ERROR)
+            {
+                m_logger.log(AD_LOGGER::ERROR, "Redis pub error: %s\n", cmd_reply->str);
+            }
+            freeReplyObject(cmd_reply);
+        }
+        else
+        {
+            m_logger.log(AD_LOGGER::ERROR, "Redis pub error: %s\n", rc->errstr);
+        }
+
+        redisFree(rc);
+    }
+}
+
+AD_REDIS_EVENT_NODE::AD_REDIS_EVENT_NODE(YAML::Node &config, AD_EVENT_SC_PTR _sc) : m_logger("REDIS SC")
 {
     AD_REDIS_HELPER tmp_helper(config, _sc);
     auto rc = tmp_helper.prepare_redis();

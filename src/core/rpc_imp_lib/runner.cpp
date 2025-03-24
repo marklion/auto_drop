@@ -1,5 +1,7 @@
 #include "runner.h"
 #include "sion.h"
+#include "../../public/event_sc/ad_redis.h"
+#include <yaml-cpp/yaml.h>
 
 static void print_log(const std::string &_log)
 {
@@ -21,14 +23,16 @@ void RUNNER::register_lua_function_virt(lua_State *_L)
         .addFunction("dev_get_trigger_vehicle_plate", &RUNNER::dev_get_trigger_vehicle_plate)
         .addFunction("dev_vehicle_rd_detect", &RUNNER::dev_vehicle_rd_detect)
         .addFunction("dev_vehicle_passed_gate", &RUNNER::dev_vehicle_passed_gate)
+        .addFunction("dev_set_lc_open", &RUNNER::dev_set_lc_open)
         .addFunction("call_http_api", &RUNNER::call_http_api)
         .addFunction("trigger_event", &RUNNER::trigger_sm_by_event)
+        .addFunction("refresh_current_state", &RUNNER::refresh_current_state)
         .endClass()
         .beginClass<AD_EVENT_SC_TIMER_NODE_PTR>("AD_EVENT_SC_TIMER_NODE_PTR")
         .endClass()
-        .beginClass<vehicle_rd_detect_result>("vehicle_rd_detect_result")
-        .addProperty("state", &vehicle_rd_detect_result::state)
-        .addProperty("is_full", &vehicle_rd_detect_result::is_full)
+        .beginClass<runner_rd_detect_result>("vehicle_rd_detect_result")
+        .addProperty("state", &runner_rd_detect_result::get_state)
+        .addProperty("is_full", &runner_rd_detect_result::get_is_full)
         .endClass()
         .addFunction("print_log_string", &print_log);
     luaL_dostring(
@@ -41,6 +45,13 @@ void RUNNER::register_lua_function_virt(lua_State *_L)
 void RUNNER::sleep_wait(int _sec, int _micro_sec)
 {
     AD_RPC_SC::get_instance()->yield_by_timer(_sec, _micro_sec);
+}
+
+void RUNNER::refresh_current_state()
+{
+    auto node = YAML::LoadFile(AD_CONST_CONFIG_FILE);
+    AD_REDIS_HELPER helper(node, AD_RPC_SC::get_instance());
+    helper.set(AD_REDIS_CHANNEL_CURRENT_STATE(), ad_rpc_get_current_state());
 }
 
 luabridge::LuaRef RUNNER::call_http_api(const std::string &_url, const std::string &_method, luabridge::LuaRef _body, luabridge::LuaRef _header)

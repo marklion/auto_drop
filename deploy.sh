@@ -23,7 +23,7 @@ get_docker_image() {
 
 start_all_server() {
     line=`wc -l $0|awk '{print $1}'`
-    line=`expr $line - 94`
+    line=`expr $line - 97`
     mkdir /tmp/sys_mt
     tail -n $line $0 | tar zx  -C /tmp/sys_mt/
     rsync -aK /tmp/sys_mt/ /
@@ -37,6 +37,9 @@ start_all_server() {
     export LC_ALL=zh_CN.UTF-8
     nginx -c /conf/nginx.conf
     wetty -c /bin/ad_cli &
+    pushd /api
+    pm2 start index.js
+    popd
     core_daemon
 }
 

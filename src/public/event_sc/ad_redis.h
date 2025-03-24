@@ -41,6 +41,7 @@ public:
     }
     void set(const std::string &key, const std::string &value);
     std::string get(const std::string &key);
+    void pub(const std::string &channel, const std::string &msg);
 };
 
 #endif // _AD_REDIS_H_
