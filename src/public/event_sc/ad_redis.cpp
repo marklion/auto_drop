@@ -146,7 +146,7 @@ void AD_REDIS_HELPER::pub(const std::string &channel, const std::string &msg)
     }
 }
 
-AD_REDIS_EVENT_NODE::AD_REDIS_EVENT_NODE(YAML::Node &config, AD_EVENT_SC_PTR _sc) : m_logger("REDIS SC")
+AD_REDIS_EVENT_NODE::AD_REDIS_EVENT_NODE(YAML::Node &config, AD_EVENT_SC_PTR _sc) : m_logger("REDIS SC"), m_sc(_sc)
 {
     AD_REDIS_HELPER tmp_helper(config, _sc);
     auto rc = tmp_helper.prepare_redis();
@@ -198,6 +198,17 @@ void AD_REDIS_EVENT_NODE::handleEvent()
             }
         }
         freeReplyObject(reply);
+    }
+    else if (m_redis->err == REDIS_ERR_EOF)
+    {
+        m_sc->unregisterNode(shared_from_this());
+        auto node = YAML::LoadFile(AD_CONST_CONFIG_FILE);
+        auto ret = std::make_shared<AD_REDIS_EVENT_NODE>(node, m_sc);
+        for (auto &pair : m_subscribed_callbacks)
+        {
+            ret->register_subscribed_callback(pair.first, pair.second);
+        }
+        m_sc->registerNode(ret);
     }
 }
 

@@ -1,5 +1,5 @@
 #include "runner.h"
-#include "sion.h"
+#include "../../public/sion.h"
 #include "../../public/event_sc/ad_redis.h"
 #include <yaml-cpp/yaml.h>
 
@@ -49,9 +49,7 @@ void RUNNER::sleep_wait(int _sec, int _micro_sec)
 
 void RUNNER::refresh_current_state()
 {
-    auto node = YAML::LoadFile(AD_CONST_CONFIG_FILE);
-    AD_REDIS_HELPER helper(node, AD_RPC_SC::get_instance());
-    helper.set(AD_REDIS_CHANNEL_CURRENT_STATE(), ad_rpc_get_current_state());
+    ad_rpc_update_current_state();
 }
 
 luabridge::LuaRef RUNNER::call_http_api(const std::string &_url, const std::string &_method, luabridge::LuaRef _body, luabridge::LuaRef _header)

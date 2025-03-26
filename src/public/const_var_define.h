@@ -20,6 +20,7 @@
 #define AD_CONST_GATE_DEVICE_NAME "gate"
 #define AD_CONST_LED_DEVICE_NAME "led"
 #define AD_CONST_LC_DEVICE_NAME "lc_device"
+#define AD_CONST_PLATE_NAME "camera"
 
 inline std::string AD_REDIS_CHANNEL_SAVE_PLY(const std::string &x = "") { return "save_ply_" + x; }
 inline std::string AD_REDIS_CHANNEL_CURRENT_STATE(const std::string &x = "") { return "current_state_" + x; }
@@ -28,5 +29,7 @@ inline std::string AD_REDIS_CHANNEL_CURRENT_STATE(const std::string &x = "") { r
 #define AD_CONST_REDIS_KEY_RD_POSITION "rd_position"
 #define AD_CONST_REDIS_KEY_RD_FULL "rd_full"
 #define AD_CONST_REDIS_KEY_LC_OPEN_THRESHOLD "lc_open_threshold"
+#define AD_CONST_REDIS_KEY_GATE "gate"
+#define AD_CONST_REDIS_KEY_PLATE "plate"
 
 #endif // _CONST_VAR_DEFINE_H_

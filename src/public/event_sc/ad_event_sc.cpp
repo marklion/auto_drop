@@ -11,6 +11,7 @@
 #include <sys/wait.h>
 #include <sys/syscall.h>
 #include <algorithm>
+#include <chrono>
 #include "ad_event_sc.h"
 
 AD_EVENT_SC::AD_EVENT_SC() : m_logger("EVENT_SC")
@@ -82,14 +83,14 @@ AD_EVENT_SC_TIMER_NODE_PTR AD_EVENT_SC::startTimer(int _timeout, int _micro_time
 {
     auto timer = std::make_shared<AD_EVENT_SC_TIMER_NODE>(_timeout, _callback, _micro_timeout);
     registerNode(timer);
-    m_logger.log(AD_LOGGER::DEBUG, "TIMER%d Start %ds-%dms timer",timer->getFd(), _timeout, _micro_timeout);
+    // m_logger.log(AD_LOGGER::DEBUG, "TIMER%d Start %ds-%dms timer",timer->getFd(), _timeout, _micro_timeout);
     return timer;
 }
 
 void AD_EVENT_SC::stopTimer(AD_EVENT_SC_TIMER_NODE_PTR _timer)
 {
     unregisterNode(_timer);
-    m_logger.log(AD_LOGGER::DEBUG, "TIMER%d Stop timer", _timer->getFd());
+    // m_logger.log(AD_LOGGER::DEBUG, "TIMER%d Stop timer", _timer->getFd());
 }
 
 class AD_CO_EVENT_NODE : public AD_EVENT_SC_NODE
@@ -116,6 +117,11 @@ public:
     virtual int getFd() const override
     {
         return m_fd;
+    }
+
+    virtual std::string node_name() const
+    {
+        return "co_event";
     }
     virtual void handleEvent() override
     {
@@ -148,6 +154,25 @@ void AD_EVENT_SC::yield_by_timer(int _timeout, int _micro_sec)
             cur_cor->set_co_state(AD_CO_ROUTINE::ACR_STATE_READY);
         });
     yield_co();
+}
+
+std::string AD_EVENT_SC::co_list()
+{
+    std::string ret;
+    for (auto &co : m_co_routines)
+    {
+        ret += co->get_co_name() + "\n";
+    }
+    for (auto &pair : m_fdToNode)
+    {
+        auto node = pair.second;
+        if (auto sc_node = dynamic_cast<AD_EVENT_SC *>(node.get()))
+        {
+            ret += sc_node->co_list();
+        }
+    }
+
+    return ret;
 }
 
 void AD_EVENT_SC::runEventLoop()
@@ -230,7 +255,9 @@ void AD_EVENT_SC::handleEvent()
                 auto p_event_node = m_fdToNode[fd];
                 add_co(
                     [p_event_node]()
-                    { p_event_node->handleEvent(); });
+                    { p_event_node->handleEvent(); },
+                    p_event_node->node_name()
+                );
             }
         }
     }
@@ -294,17 +321,17 @@ int AD_EVENT_SC_TIMER_NODE::getFd() const
 
 void AD_EVENT_SC_TIMER_NODE::handleEvent()
 {
-    AD_LOGGER tmp_logger("TIMER" + std::to_string(m_timer_fd));
+    // AD_LOGGER tmp_logger("TIMER" + std::to_string(m_timer_fd));
     unsigned long long exp;
     auto read_len = read(m_timer_fd, &exp, sizeof(exp));
     if (read_len == sizeof(exp))
     {
-        tmp_logger.log(AD_LOGGER::DEBUG, "%ds-%dms timer fd:%d expired", m_timeout, m_micro_timeout, m_timer_fd);
+        // tmp_logger.log(AD_LOGGER::DEBUG, "%ds-%dms timer fd:%d expired", m_timeout, m_micro_timeout, m_timer_fd);
         m_callback();
     }
     else
     {
-        tmp_logger.log(AD_LOGGER::ERROR, "Failed to read timer fd:%s", strerror(errno));
+        // tmp_logger.log(AD_LOGGER::ERROR, "Failed to read timer fd:%s", strerror(errno));
     }
 }
 
@@ -419,7 +446,7 @@ static void co_routine_func(AD_CO_ROUTINE *_co)
     _co->set_co_state(AD_CO_ROUTINE::ACR_STATE_DEAD);
 }
 static long g_co_id = 0;
-AD_CO_ROUTINE::AD_CO_ROUTINE(AD_CO_ROUTINE_FUNC _func, ucontext_t *_main_co) : m_func(_func)
+AD_CO_ROUTINE::AD_CO_ROUTINE(AD_CO_ROUTINE_FUNC _func, ucontext_t *_main_co, const std::string &_name) : m_func(_func),m_co_name(_name)
 {
     getcontext(&m_context);
     m_context.uc_stack.ss_sp = m_stacks;
@@ -434,7 +461,7 @@ ucontext_t AD_CO_ROUTINE::m_global_context;
 
 void AD_CO_ROUTINE::co_run(std::function<void()> _main_func)
 {
-    auto init_co = std::make_shared<AD_CO_ROUTINE>(_main_func, &m_global_context);
+    auto init_co = std::make_shared<AD_CO_ROUTINE>(_main_func, &m_global_context, "depended");
     init_co->resume(&m_global_context);
 }
 
@@ -477,4 +504,9 @@ void AD_CO_MUTEX::unlock()
         co->set_co_state(AD_CO_ROUTINE::ACR_STATE_READY);
     }
     m_logger.log(AD_LOGGER::DEBUG, "%p unlocked %p", m_belong->get_current_co().get(), this);
+}
+
+std::string AD_EVENT_SC_NODE::node_name() const
+{
+    return "default";
 }

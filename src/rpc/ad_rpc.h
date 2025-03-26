@@ -133,7 +133,15 @@ public:
         try
         {
             client_buffer_trans->open();
-            _func(client);
+            try
+            {
+                _func(client);
+            }
+            catch (const std::exception &e)
+            {
+                m_logger.log(AD_LOGGER::ERROR, "call_remote error:%s", e.what());
+            }
+
             client_buffer_trans->close();
         }
         catch (const std::exception &e)
@@ -164,6 +172,7 @@ public:
             m_rpc_listen_node->add_processor(_service, processor);
         }
     }
+    void start_co_record();
     void start_server()
     {
         signal(SIGPIPE, SIG_IGN);
@@ -188,5 +197,6 @@ u16 ad_rpc_get_specific_dev_port(const std::string &dev_name);
 std::vector<sm_config> ad_rpc_get_run_sm();
 std::string ad_rpc_device_save_ply(const std::string &dev_name);
 std::string ad_rpc_get_current_state();
+void ad_rpc_update_current_state();
 
 #endif // _AD_RPC_H_

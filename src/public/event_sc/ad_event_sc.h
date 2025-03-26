@@ -18,6 +18,7 @@ public:
 
     // 处理文件描述符上的事件
     virtual void handleEvent() = 0;
+    virtual std::string node_name() const;
 };
 typedef std::shared_ptr<AD_EVENT_SC_NODE> AD_EVENT_SC_NODE_PTR;
 class AD_EVENT_SC_TIMER_NODE : public AD_EVENT_SC_NODE
@@ -34,6 +35,11 @@ public:
     int getFd() const override;
 
     void handleEvent() override;
+
+    virtual std::string node_name() const
+    {
+        return "timer";
+    }
 };
 typedef std::shared_ptr<AD_EVENT_SC_TIMER_NODE> AD_EVENT_SC_TIMER_NODE_PTR;
 typedef std::function<void()> AD_CO_ROUTINE_FUNC;
@@ -53,10 +59,11 @@ private:
     static ucontext_t m_global_context;
     bool m_yield_result = true;
 public:
+    std::string m_co_name;
     ucontext_t m_context = {0};
-    char m_stacks[128 * 1024] = {0};
+    char m_stacks[8*1024 * 1024];
     AD_CO_ROUTINE_FUNC m_func;
-    AD_CO_ROUTINE(AD_CO_ROUTINE_FUNC _func, ucontext_t *_main_co);
+    AD_CO_ROUTINE(AD_CO_ROUTINE_FUNC _func, ucontext_t *_main_co, const std::string &_name);
     ~AD_CO_ROUTINE()
     {
     }
@@ -86,6 +93,10 @@ public:
     {
         return m_yield_result;
     }
+    std::string get_co_name()
+    {
+        return m_co_name;
+    }
     static void co_run(std::function<void()> _main_func);
 };
 typedef std::shared_ptr<AD_CO_ROUTINE> AD_CO_ROUTINE_PTR;
@@ -110,6 +121,7 @@ public:
 
     bool yield_by_fd(int _fd, int _micro_sec = 0);
     void yield_by_timer(int _timeout, int yield_micro_sec = 0);
+    std::string co_list();
 
     // 运行事件循环
     void runEventLoop();
@@ -136,9 +148,9 @@ public:
         m_current_co.reset();
         p_tmp->yield(&m_main_context);
     }
-    AD_CO_ROUTINE_PTR add_co(AD_CO_ROUTINE_FUNC _func)
+    AD_CO_ROUTINE_PTR add_co(AD_CO_ROUTINE_FUNC _func, const std::string &_name = "")
     {
-        auto co = std::make_shared<AD_CO_ROUTINE>(_func, &m_main_context);
+        auto co = std::make_shared<AD_CO_ROUTINE>(_func, &m_main_context, _name);
         m_co_routines.push_back(co);
         return co;
     }
@@ -189,6 +201,11 @@ public:
     void handleEvent() override;
     virtual void handleRead(const unsigned char *_data, unsigned long _size) = 0;
     virtual void handleError() {};
+
+    virtual std::string node_name() const
+    {
+        return "tcp_data";
+    }
 };
 
 typedef std::function<AD_EVENT_SC_TCP_DATA_NODE_PTR(int, AD_EVENT_SC_TCP_LISTEN_NODE_PTR)> CREATE_DATA_FUNC;
@@ -217,6 +234,11 @@ public:
 
     void handleEvent() override;
     void close_data_node(int _fd);
+
+    virtual std::string node_name() const
+    {
+        return "tcp_listen";
+    }
 };
 
 #endif // _AD_EVENT_SC_H_

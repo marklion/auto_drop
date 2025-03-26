@@ -1,7 +1,7 @@
 #include "sm_rpc.h"
 #include "../../rpc/ad_rpc.h"
 #include "../../rpc/gen_code/cpp/driver_service.h"
-#include "rpc_wrapper.h"
+#include "../../rpc/rpc_wrapper.h"
 
 void runner_sm_impl::push_sm_event(const std::string &event_name)
 {

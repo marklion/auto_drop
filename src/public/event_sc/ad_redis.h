@@ -10,12 +10,18 @@ class AD_REDIS_EVENT_NODE:public AD_EVENT_SC_NODE{
     redisContext *m_redis = nullptr;
     AD_LOGGER m_logger;
     std::map<std::string, REDIS_SUBSCRIBED_CALLBACK> m_subscribed_callbacks;
+    AD_EVENT_SC_PTR m_sc;
 public:
     AD_REDIS_EVENT_NODE(YAML::Node &config, AD_EVENT_SC_PTR _sc);
     virtual ~AD_REDIS_EVENT_NODE();
     virtual int getFd() const override;
     virtual void handleEvent() override;
     void register_subscribed_callback(const std::string &channel, REDIS_SUBSCRIBED_CALLBACK callback);
+
+    virtual std::string node_name() const
+    {
+        return "redis";
+    }
 };
 
 class AD_REDIS_HELPER

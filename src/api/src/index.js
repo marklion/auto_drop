@@ -3,9 +3,11 @@ const app = express();
 const Redis = require('ioredis');
 const fs = require('fs');
 const yaml = require('js-yaml');
+const { DataSyncServer } = require('../../public/pub_node_lib/websocket-data-sync.js');
 
 app.use(express.json()) // for parsing application/json
 app.use(express.urlencoded({ extended: true })) // for parsing application/x-www-form-urlencoded
+const ws_server = new DataSyncServer({ port: 23312 });
 
 async function get_redis_config() {
     const configPath = '/conf/config.yaml';
@@ -83,6 +85,22 @@ app.post('/api/redis/pub', async (req, res) => {
 
     res.send(ret);
 });
+app.post('/api/update_state', async (req, res) => {
+    let redis_config = await get_redis_config();
+    if (redis_config) {
+        const redis = new Redis({
+            host: redis_config.host,
+            port: redis_config.port,
+            password: redis_config.password
+        })
+        let state = await redis.hget("appliance:" + process.env.SELF_SERIAL, "current_state_");
+        redis.quit();
+        ws_server.setData('current_state_', state);
+    }
+    res.send({ err_msg: '' });
+})
+
+
 
 process.on('uncaughtException', (err) => {
     console.error('An uncaught error occurred!');

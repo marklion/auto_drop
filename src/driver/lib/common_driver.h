@@ -36,9 +36,7 @@ public:
     virtual void sim_vehicle_position(const vehicle_position_detect_state::type state) override final;
     virtual void sim_vehicle_stuff(const bool is_full) override final;
     virtual bool vehicle_passed_gate() override final;
-    virtual void set_lc_open(const int32_t thredhold) {
-        m_lc_open_threshold = thredhold;
-    }
+    virtual void set_lc_open(const int32_t thredhold);
     virtual int32_t get_lc_open() override final;
     virtual double get_scale_weight() override final;
 };

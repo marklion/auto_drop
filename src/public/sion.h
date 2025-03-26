@@ -27,7 +27,7 @@
 #include <openssl/err.h>
 #include <openssl/ssl.h>
 #endif // !SION_DISABLE_SSL
-#include "../../rpc/ad_rpc.h"
+#include "../rpc/ad_rpc.h"
 #include <sys/epoll.h>
 #include <fcntl.h>
 namespace sion

@@ -113,6 +113,10 @@ public:
         return 0;
     }
     virtual void handleEvent();
+    virtual std::string node_name() const
+    {
+        return "keyboard";
+    }
 };
 
 class LinuxKeyboard : public InputDevice

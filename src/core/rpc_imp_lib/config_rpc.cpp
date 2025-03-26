@@ -9,7 +9,7 @@
 #include "../../rpc/gen_code/cpp/driver_service.h"
 #include "../../rpc/gen_code/cpp/runner_sm.h"
 #include "../../public/const_var_define.h"
-#include "rpc_wrapper.h"
+#include "../../rpc/rpc_wrapper.h"
 #include "../action/ad_action.h"
 
 static int create_sub_process(const std::string &_path, const std::vector<std::string> &_argv)
@@ -48,6 +48,11 @@ public:
     ~SUBPROCESS_EVENT_SC_NODE()
     {
         close(m_fd);
+    }
+
+    virtual std::string node_name() const
+    {
+        return "subprocess";
     }
     virtual int getFd() const override
     {

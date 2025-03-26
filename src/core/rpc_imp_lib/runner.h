@@ -5,7 +5,7 @@
 #include "../../rpc/ad_rpc.h"
 #include "../../rpc/gen_code/cpp/driver_service.h"
 #include "../../public/const_var_define.h"
-#include "rpc_wrapper.h"
+#include "../../rpc/rpc_wrapper.h"
 
 typedef std::function<void()> CLEAR_FUNC;
 class RV_FATHER

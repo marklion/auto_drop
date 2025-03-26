@@ -59,31 +59,42 @@ void common_driver::vehicle_rd_detect(vehicle_rd_detect_result &_return)
 void common_driver::sim_vehicle_came(const std::string &plate)
 {
     m_latest_plate = plate;
+    ad_rpc_update_current_state();
 }
 
 void common_driver::sim_gate_status(const bool is_close)
 {
     m_gate_is_close = is_close;
+    ad_rpc_update_current_state();
 }
 
 void common_driver::sim_scale_weight(const double weight)
 {
     m_current_weight = weight;
+    ad_rpc_update_current_state();
 }
 
 void common_driver::sim_vehicle_position(const vehicle_position_detect_state::type state)
 {
     m_rd_result.state = state;
+    ad_rpc_update_current_state();
 }
 
 void common_driver::sim_vehicle_stuff(const bool is_full)
 {
     m_rd_result.is_full = is_full;
+    ad_rpc_update_current_state();
 }
 
 bool common_driver::vehicle_passed_gate()
 {
     return m_gate_is_close;
+}
+
+void common_driver::set_lc_open(const int32_t thredhold)
+{
+    m_lc_open_threshold = thredhold;
+    ad_rpc_update_current_state();
 }
 
 int32_t common_driver::get_lc_open()
