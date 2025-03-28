@@ -3,6 +3,7 @@ const webpack = require('webpack')
 
 const port = process.env.port || process.env.npm_config_port || 9528 // dev port
 module.exports = defineConfig({
+  outputDir:'./build/single_ui',
   publicPath: process.env.NODE_ENV === 'production' ? './' : '/',
   transpileDependencies: true,
   devServer: {
