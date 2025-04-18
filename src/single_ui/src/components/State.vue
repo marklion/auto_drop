@@ -1,26 +1,26 @@
 <template>
-<div >
+<div>
     <el-card>
         <el-descriptions title="设备状态" :column="3" size="medium">
             <el-descriptions-item label="当前车号">{{current_state.plate}}</el-descriptions-item>
             <el-descriptions-item label="道闸状态">
                 <el-tag size="mini" type="success" v-if="!current_state.gate">开启</el-tag>
-                <el-tag type="danger" v-else>开启</el-tag>
+                <el-tag type="danger" size="mini" v-else>关闭</el-tag>
             </el-descriptions-item>
             <el-descriptions-item label="溜槽开度">
                 <div style="width: 200px">
-                    <el-progress  :percentage="current_state.lc_open_threshold"></el-progress>
+                    <el-progress :percentage="current_state.lc_open_threshold"></el-progress>
                 </div>
             </el-descriptions-item>
             <el-descriptions-item label="车辆位置">
-                <el-tag type="primary" v-if="current_state.rd_position == 0">初段</el-tag>
-                <el-tag type="success" v-else-if="current_state.rd_position == 1">中段</el-tag>
-                <el-tag type="warning" v-else-if="current_state.rd_position == 2">末段</el-tag>
-                <el-tag type="danger" v-else>无车辆</el-tag>
+                <el-tag type="primary" size="mini" v-if="current_state.rd_position == 0">初段</el-tag>
+                <el-tag type="success" size="mini" v-else-if="current_state.rd_position == 1">中段</el-tag>
+                <el-tag type="warning" size="mini" v-else-if="current_state.rd_position == 2">末段</el-tag>
+                <el-tag type="danger" size="mini" v-else>无车辆</el-tag>
             </el-descriptions-item>
             <el-descriptions-item label="料堆状态">
-                <el-tag type="success" v-if="!current_state.rd_full">未满</el-tag>
-                <el-tag type="danger" v-else>满</el-tag>
+                <el-tag type="success" size="mini" v-if="!current_state.rd_full">未满</el-tag>
+                <el-tag type="danger" size="mini" v-else>满</el-tag>
             </el-descriptions-item>
             <el-descriptions-item label="地磅读数">{{current_state.scale_weight.toFixed(2)}}</el-descriptions-item>
         </el-descriptions>
