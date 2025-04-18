@@ -24,6 +24,7 @@
 
 inline std::string AD_REDIS_CHANNEL_SAVE_PLY(const std::string &x = "") { return "save_ply_" + x; }
 inline std::string AD_REDIS_CHANNEL_CURRENT_STATE(const std::string &x = "") { return "current_state_" + x; }
+inline std::string AD_REDIS_CHANNEL_GATE_CTRL(const std::string &x = "") { return "gate_ctrl_" + x; }
 
 #define AD_CONST_REDIS_KEY_SCALE "scale_weight"
 #define AD_CONST_REDIS_KEY_RD_POSITION "rd_position"

@@ -1,6 +1,7 @@
 #include "ad_action.h"
 #include "../../public/const_var_define.h"
 #include "../../rpc/ad_rpc.h"
+#include "../../public/utils/CJsonObject.hpp"
 struct subcribe_map
 {
     std::function<std::string(const std::string &)> key_func;
@@ -9,7 +10,17 @@ struct subcribe_map
 
 static subcribe_map g_sb_map[] = {
     {AD_REDIS_CHANNEL_SAVE_PLY, ad_rpc_device_save_ply},
-    {AD_REDIS_CHANNEL_CURRENT_STATE, [](const std::string &) { return ad_rpc_get_current_state(); }},
+    {AD_REDIS_CHANNEL_CURRENT_STATE, [](const std::string &)
+     { return ad_rpc_get_current_state(); }},
+    {AD_REDIS_CHANNEL_GATE_CTRL,
+     [](const std::string &_msg)
+     {
+         auto json_obj = neb::CJsonObject(_msg);
+         auto dev_name = json_obj("dev_name");
+         auto is_open = json_obj("is_open");
+         ad_rpc_gate_ctrl(dev_name, is_open == "true");
+         return "";
+     }},
 };
 
 AD_REDIS_EVENT_NODE_PTR create_redis_event_node()

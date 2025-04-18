@@ -12,7 +12,11 @@ module.exports = defineConfig({
     hot: true,
     proxy: {
       '/api': {
-        target: 'http://localhost:38010',
+        target: 'http://172.17.0.1:38010',
+        changeOrigin: true,
+      },
+      '/ws': {
+        target: 'http://172.17.0.1:38010',
         changeOrigin: true,
       },
     }

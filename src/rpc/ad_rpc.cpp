@@ -15,6 +15,7 @@ class my_rpc_trans : public AD_EVENT_SC_TCP_DATA_NODE
 {
     std::shared_ptr<apache::thrift::TMultiplexedProcessor> m_processor = std::make_shared<apache::thrift::TMultiplexedProcessor>();
     AD_LOGGER m_logger = AD_LOGGER("RPC");
+
 public:
     using AD_EVENT_SC_TCP_DATA_NODE::AD_EVENT_SC_TCP_DATA_NODE;
     void handleRead(const unsigned char *buf, size_t len) override
@@ -33,7 +34,6 @@ public:
     {
         m_processor->registerProcessor(service_name, processor);
     }
-
 };
 
 AD_EVENT_SC_TCP_DATA_NODE_PTR AD_RPC_EVENT_NODE::create_rpc_tcp_data_node(int fd, AD_EVENT_SC_TCP_LISTEN_NODE_PTR listen_node)
@@ -98,9 +98,8 @@ std::string ad_rpc_device_save_ply(const std::string &dev_name)
     u16 port = ad_rpc_get_specific_dev_port(dev_name);
     if (port > 0)
     {
-        AD_RPC_SC::get_instance()->call_remote<driver_serviceClient>(
+        rpc_wrapper_call_device(
             port,
-            "driver_service",
             [&](driver_serviceClient &client)
             {
                 client.save_ply_file(ret);
@@ -111,43 +110,37 @@ std::string ad_rpc_device_save_ply(const std::string &dev_name)
 }
 
 static std::map<std::string, std::function<void(driver_serviceClient &, neb::CJsonObject &json_obj)>> g_all_state_get_map = {
-    {
-        AD_CONST_GATE_DEVICE_NAME,
-        [](driver_serviceClient &client, neb::CJsonObject &json_obj) {
-            auto gate = client.vehicle_passed_gate();
-            json_obj.Add(AD_CONST_REDIS_KEY_GATE, gate, gate);
-        }
-    },
-    {
-        AD_CONST_PLATE_NAME,
-        [](driver_serviceClient &client, neb::CJsonObject &json_obj) {
-            std::string plate;
-            client.get_trigger_vehicle_plate(plate);
-            json_obj.Add(AD_CONST_REDIS_KEY_PLATE, plate);
-        }
-    },
-    {
-        AD_CONST_RIDAR_DEVICE_NAME,
-        [](driver_serviceClient &client, neb::CJsonObject &json_obj) {
-            vehicle_rd_detect_result rd_result;
-            client.vehicle_rd_detect(rd_result);
-            json_obj.Add(AD_CONST_REDIS_KEY_RD_POSITION, rd_result.state);
-            json_obj.Add(AD_CONST_REDIS_KEY_RD_FULL, rd_result.is_full);
-        }
-    },
-    {
-        AD_CONST_SCALE_DEVICE_NAME,
-        [](driver_serviceClient &client, neb::CJsonObject &json_obj) {
-            json_obj.Add(AD_CONST_REDIS_KEY_SCALE, client.get_scale_weight());
-        }
-    },
-    {
-        AD_CONST_LC_DEVICE_NAME,
-        [](driver_serviceClient &client, neb::CJsonObject &json_obj) {
-            json_obj.Add(AD_CONST_REDIS_KEY_LC_OPEN_THRESHOLD, client.get_lc_open());
-        }
-    }
-};
+    {AD_CONST_GATE_DEVICE_NAME,
+     [](driver_serviceClient &client, neb::CJsonObject &json_obj)
+     {
+         auto gate = client.vehicle_passed_gate();
+         json_obj.Add(AD_CONST_REDIS_KEY_GATE, gate, gate);
+     }},
+    {AD_CONST_PLATE_NAME,
+     [](driver_serviceClient &client, neb::CJsonObject &json_obj)
+     {
+         std::string plate;
+         client.get_trigger_vehicle_plate(plate);
+         json_obj.Add(AD_CONST_REDIS_KEY_PLATE, plate);
+     }},
+    {AD_CONST_RIDAR_DEVICE_NAME,
+     [](driver_serviceClient &client, neb::CJsonObject &json_obj)
+     {
+         vehicle_rd_detect_result rd_result;
+         client.vehicle_rd_detect(rd_result);
+         json_obj.Add(AD_CONST_REDIS_KEY_RD_POSITION, rd_result.state);
+         json_obj.Add(AD_CONST_REDIS_KEY_RD_FULL, rd_result.is_full);
+     }},
+    {AD_CONST_SCALE_DEVICE_NAME,
+     [](driver_serviceClient &client, neb::CJsonObject &json_obj)
+     {
+         json_obj.Add(AD_CONST_REDIS_KEY_SCALE, client.get_scale_weight());
+     }},
+    {AD_CONST_LC_DEVICE_NAME,
+     [](driver_serviceClient &client, neb::CJsonObject &json_obj)
+     {
+         json_obj.Add(AD_CONST_REDIS_KEY_LC_OPEN_THRESHOLD, client.get_lc_open());
+     }}};
 
 std::string ad_rpc_get_current_state()
 {
@@ -167,6 +160,20 @@ std::string ad_rpc_get_current_state()
     }
 
     return json_obj.ToString();
+}
+
+void ad_rpc_gate_ctrl(const std::string &dev_name, bool _is_open)
+{
+    u16 port = ad_rpc_get_specific_dev_port(dev_name);
+    if (port > 0)
+    {
+        rpc_wrapper_call_device(
+            port,
+            [&](driver_serviceClient &client)
+            {
+                client.gate_control(!_is_open);
+            });
+    }
 }
 
 void ad_rpc_update_current_state()
@@ -194,6 +201,5 @@ void AD_RPC_SC::start_co_record()
             std::string file_name = "/tmp/co_list";
             file_name += std::to_string(getpid()) + ".txt";
             std::ofstream out(file_name, std::ios::trunc);
-            out << get_instance()->co_list();
-        });
+            out << get_instance()->co_list(); });
 }
