@@ -47,11 +47,7 @@ export default {
     display: flex;
     flex-direction: column;
     /* 保持子元素垂直排列 */
-    justify-content: center;
-    /* 垂直居中 */
     align-items: center;
     /* 水平居中 */
-    height: 100vh;
-    /* 让父容器占满视口高度 */
 }
 </style>

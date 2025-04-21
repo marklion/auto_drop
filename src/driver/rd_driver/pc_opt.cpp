@@ -5,6 +5,7 @@
 #include <pcl/segmentation/sac_segmentation.h>
 #include <pcl/filters/extract_indices.h>
 #include <pcl/io/ply_io.h>
+#include <pcl/io/pcd_io.h>
 #include <boost/filesystem.hpp>
 #include <rs_driver/api/lidar_driver.hpp>
 #include <rs_driver/msg/pcl_point_cloud_msg.hpp>
@@ -217,6 +218,16 @@ static void insert_several_points(myPointCloud::Ptr _cloud, const myPoint &p1, c
     _cloud->points.push_back(p2);
 }
 static myPointCloud::Ptr g_cur_cloud;
+static void serializePointCloud(myPointCloud::Ptr cloud)
+{
+    std::ofstream ofs("/tmp/cloud.bin", std::ios::binary);
+    for (const auto &point : *cloud)
+    {
+        float data[7] = {
+            point.x, point.y, point.z, point.r / 255.0f, point.g / 255.0f, point.b / 255.0f};
+        ofs.write(reinterpret_cast<char *>(data), sizeof(data));
+    }
+}
 static void pc_get_state(myPointCloud::Ptr _cloud)
 {
     vehicle_rd_detect_result ret;
@@ -314,6 +325,7 @@ static void pc_get_state(myPointCloud::Ptr _cloud)
     {
         std::lock_guard<std::mutex> lock(g_rd_result_mutex);
         g_cur_cloud = cloud_last;
+        serializePointCloud(g_cur_cloud);
     }
 
     save_detect_result(ret);
@@ -418,7 +430,7 @@ static void process_msg(std::shared_ptr<pcMsg> msg)
         gettimeofday(&tv, nullptr);
         long long after_microseconds = tv.tv_sec * 1000000LL + tv.tv_usec;
         AD_LOGGER tmp_logger("LIDAR");
-        tmp_logger.log("take %ld us", after_microseconds-current_microseconds);
+        tmp_logger.log("take %ld us", after_microseconds - current_microseconds);
     }
 }
 

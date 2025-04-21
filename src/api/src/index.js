@@ -130,6 +130,15 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
     });
 });
 
+setInterval(async () => {
+    try {
+        const data = await fs.promises.readFile('/tmp/cloud.bin')
+        ws_server.setData('pcd', JSON.stringify({ data: data.toString('base64') }));
+    } catch (error) {
+        console.error('Error occurred:', error);
+    }
+}, 1000);
+
 process.on('uncaughtException', (err) => {
     console.error('An uncaught error occurred!');
     console.error(err.stack);

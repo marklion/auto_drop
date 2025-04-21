@@ -6,6 +6,7 @@
             <flv-player></flv-player>
         </el-col>
         <el-col :span="8">
+            <pcd-show></pcd-show>
             <control></control>
         </el-col>
         <el-col :span="8">
@@ -18,6 +19,7 @@
 <script>
 import Control from './components/Control.vue'
 import FlvPlayer from './components/FlvPlayer.vue'
+import PcdShow from './components/PcdShow.vue'
 import State from './components/State.vue'
 export default {
     name: 'App',
@@ -25,6 +27,7 @@ export default {
         "state": State,
         "flv-player": FlvPlayer,
         "control": Control,
+        "pcd-show": PcdShow,
     },
     data: function () {
         return {
