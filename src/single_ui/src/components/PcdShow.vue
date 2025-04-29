@@ -19,19 +19,46 @@ export default {
     },
     watch: {
         pcd: function () {
-            const buffer = new Float32Array(this.pcd);
-            const positions = new Float32Array(buffer.length / 7 * 3);
-            const colors = new Float32Array(buffer.length / 7 * 3);
+            function voxelGridFilter(buffer, voxelSize) {
+                const voxelMap = new Map();
 
-            // 解析二进制数据（格式：x,y,z,r,g,b）
-            for (let i = 0; i < buffer.length; i += 7) {
-                positions[i / 7 * 3] = buffer[i];
-                positions[i / 7 * 3 + 1] = buffer[i + 1];
-                positions[i / 7 * 3 + 2] = buffer[i + 2];
+                for (let i = 0; i < buffer.length; i += 7) {
+                    const x = Math.floor(buffer[i] / voxelSize);
+                    const y = Math.floor(buffer[i + 1] / voxelSize);
+                    const z = Math.floor(buffer[i + 2] / voxelSize);
 
-                colors[i / 7 * 3] = buffer[i + 3];
-                colors[i / 7 * 3 + 1] = buffer[i + 4];
-                colors[i / 7 * 3 + 2] = buffer[i + 5];
+                    const key = `${x},${y},${z}`;
+                    if (!voxelMap.has(key)) {
+                        voxelMap.set(key, [
+                            buffer[i],     // x
+                            buffer[i + 1], // y
+                            buffer[i + 2], // z
+                            buffer[i + 3], // r
+                            buffer[i + 4], // g
+                            buffer[i + 5]  // b
+                        ]);
+                    }
+                }
+
+                const sampledBuffer = Array.from(voxelMap.values()).flat();
+                return new Float32Array(sampledBuffer);
+            }
+
+            const voxelSize = 0.05; // 设置体素大小
+            const filteredBuffer = voxelGridFilter(new Float32Array(this.pcd.buffer), voxelSize);
+
+            // 解析过滤后的点云数据
+            const positions = new Float32Array(filteredBuffer.length / 6 * 3);
+            const colors = new Float32Array(filteredBuffer.length / 6 * 3);
+
+            for (let i = 0; i < filteredBuffer.length; i += 6) {
+                positions[i / 6 * 3] = filteredBuffer[i];
+                positions[i / 6 * 3 + 1] = filteredBuffer[i + 1];
+                positions[i / 6 * 3 + 2] = filteredBuffer[i + 2];
+
+                colors[i / 6 * 3] = filteredBuffer[i + 3];
+                colors[i / 6 * 3 + 1] = filteredBuffer[i + 4];
+                colors[i / 6 * 3 + 2] = filteredBuffer[i + 5];
             }
 
             this.geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
@@ -48,24 +75,30 @@ export default {
         init_three: async function () {
             // 初始化场景
             const scene = new THREE.Scene();
-            const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            const camera = new THREE.PerspectiveCamera(90, window.innerWidth / window.innerHeight, 1, 10);
             const renderer = new THREE.WebGLRenderer({
                 antialias: true,
                 canvas: document.getElementById('canvas')
             });
             this.renderer = renderer;
-            camera.position.x = 200
-            camera.position.y = 200
-            camera.position.z = 200
+            camera.position.x = 0
+            camera.position.y = -1.5
+            camera.position.z = -2.5
+            camera.up.set(0, 0, 1);
+            camera.lookAt(0, 0, -2);
 
             // 创建点云容器
             const geometry = new THREE.BufferGeometry();
             const material = new THREE.PointsMaterial({
-                size: 0.1,
+                size: 0.00000000001,
                 vertexColors: true
             });
             const points = new THREE.Points(geometry, material);
             scene.add(points);
+
+            const axesHelper = new THREE.AxesHelper(5); // 创建一个坐标轴辅助工具，长度为 5
+            scene.add(axesHelper); // 将坐标轴添加到场景中
+
             this.geometry = geometry;
             this.scene = scene;
             this.camera = camera;

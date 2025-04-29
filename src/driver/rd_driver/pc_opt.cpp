@@ -13,6 +13,8 @@
 #include <thread>
 #include "../../public/utils/ad_utils.h"
 #include "../../rpc/ad_rpc.h"
+#include <sys/file.h> // 引入 flock
+#include <unistd.h>   // 引入 close
 
 static AD_INI_CONFIG *g_ini_config = nullptr;
 static vehicle_rd_detect_result g_rd_result;
@@ -38,17 +40,17 @@ static void save_ply(myPointCloud::Ptr cloud, const std::string &_filename = "")
 }
 static std::shared_ptr<pcMsg> create_new_msg()
 {
-    static int inter = 0;
-    inter++;
-    if (inter == 15)
-    {
-        inter = 0;
-        return std::make_shared<pcMsg>();
-    }
-    else
-    {
-        return nullptr;
-    }
+    return std::make_shared<pcMsg>();
+    // static int inter = 0;
+    // inter++;
+    // if (inter == 15)
+    // {
+    //     inter = 0;
+    // }
+    // else
+    // {
+    //     return nullptr;
+    // }
 }
 static void split_cloud_by_pt(myPointCloud::Ptr _cloud, const std::string &_field, float _min, float _max, myPointCloud::Ptr &_cloud_filtered, myPointCloud::Ptr &_cloud_last)
 {
@@ -218,15 +220,44 @@ static void insert_several_points(myPointCloud::Ptr _cloud, const myPoint &p1, c
     _cloud->points.push_back(p2);
 }
 static myPointCloud::Ptr g_cur_cloud;
+static int g_update_counter = 0; // 添加一个全局计数器
 static void serializePointCloud(myPointCloud::Ptr cloud)
 {
+    int fd = open("/tmp/cloud.lock", O_CREAT | O_RDWR, 0666); // 打开或创建锁文件
+    if (fd == -1)
+    {
+        perror("Failed to open lock file");
+        return;
+    }
+
+    if (flock(fd, LOCK_EX) == -1) // 加独占锁
+    {
+        perror("Failed to acquire file lock");
+        close(fd);
+        return;
+    }
+
+    // 写入点云数据
     std::ofstream ofs("/tmp/cloud.bin", std::ios::binary);
+    if (!ofs.is_open())
+    {
+        perror("Failed to open /tmp/cloud.bin");
+        flock(fd, LOCK_UN); // 释放锁
+        close(fd);
+        return;
+    }
+
     for (const auto &point : *cloud)
     {
         float data[7] = {
-            point.x, point.y, point.z, point.r / 255.0f, point.g / 255.0f, point.b / 255.0f};
+            point.x, point.y, point.z, point.r * 1.0f, point.g * 1.0f, point.b * 1.0f, 0.0f};
         ofs.write(reinterpret_cast<char *>(data), sizeof(data));
     }
+
+    ofs.close();
+
+    flock(fd, LOCK_UN); // 释放锁
+    close(fd);          // 关闭文件描述符
 }
 static void pc_get_state(myPointCloud::Ptr _cloud)
 {
@@ -325,7 +356,12 @@ static void pc_get_state(myPointCloud::Ptr _cloud)
     {
         std::lock_guard<std::mutex> lock(g_rd_result_mutex);
         g_cur_cloud = cloud_last;
-        serializePointCloud(g_cur_cloud);
+        g_update_counter++;
+        if (g_update_counter >= 5)
+        {
+            serializePointCloud(g_cur_cloud);
+            g_update_counter = 0; // 重置计数器
+        }
     }
 
     save_detect_result(ret);
@@ -384,6 +420,7 @@ static void pc_transform(myPointCloud::Ptr cloud)
     myPointCloud::Ptr tmp = cloud;
 
     pcl::transformPointCloud(*tmp, *ret, transform);
+
     pc_range_filter(ret);
 }
 static int g_total_frame = 0;

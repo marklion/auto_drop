@@ -4,6 +4,7 @@ const Redis = require('ioredis');
 const fs = require('fs');
 const yaml = require('js-yaml');
 const { DataSyncServer } = require('../../public/pub_node_lib/websocket-data-sync.js');
+const lockfile = require('proper-lockfile');
 
 app.use(express.json()) // for parsing application/json
 app.use(express.urlencoded({ extended: true })) // for parsing application/x-www-form-urlencoded
@@ -132,12 +133,20 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
 
 setInterval(async () => {
     try {
+
+        const lockPath = '/tmp/cloud.lock';
+        // 获取文件锁
+        const release = await lockfile.lock(lockPath, {
+            retries: 5, // 重试次数
+            retryWait: 100 // 每次重试等待时间（毫秒）
+        });
         const data = await fs.promises.readFile('/tmp/cloud.bin')
+        await release();
         ws_server.setData('pcd', JSON.stringify({ data: data.toString('base64') }));
     } catch (error) {
         console.error('Error occurred:', error);
     }
-}, 1000);
+}, 300);
 
 process.on('uncaughtException', (err) => {
     console.error('An uncaught error occurred!');
