@@ -15,6 +15,7 @@
 #include "../../rpc/ad_rpc.h"
 #include <sys/file.h> // 引入 flock
 #include <unistd.h>   // 引入 close
+#include <rs_driver/utility/sync_queue.hpp>
 
 static AD_INI_CONFIG *g_ini_config = nullptr;
 static vehicle_rd_detect_result g_rd_result;
@@ -23,6 +24,37 @@ static std::mutex g_rd_result_mutex;
 typedef pcl::PointXYZRGB myPoint;
 typedef pcl::PointCloud<myPoint> myPointCloud;
 typedef PointCloudT<myPoint> pcMsg;
+
+robosense::lidar::SyncQueue<std::shared_ptr<pcMsg>> free_cloud_queue;
+robosense::lidar::SyncQueue<std::shared_ptr<pcMsg>> stuffed_cloud_queue;
+static void process_msg(std::shared_ptr<pcMsg> msg);
+void processCloud(void)
+{
+    while (true)
+    {
+        std::shared_ptr<pcMsg> msg = stuffed_cloud_queue.popWait();
+        if (msg.get() == NULL)
+        {
+            continue;
+        }
+        process_msg(msg);
+        free_cloud_queue.push(msg);
+    }
+}
+std::shared_ptr<pcMsg> driverGetPointCloudFromCallerCallback(void)
+{
+    std::shared_ptr<pcMsg> msg = free_cloud_queue.pop();
+    if (msg.get() != NULL)
+    {
+        return msg;
+    }
+
+    return std::make_shared<pcMsg>();
+}
+void driverReturnPointCloudToCallerCallback(std::shared_ptr<pcMsg> msg)
+{
+    stuffed_cloud_queue.push(msg);
+}
 static void save_ply(myPointCloud::Ptr cloud, const std::string &_filename = "")
 {
     static int file_no = 0;
@@ -444,7 +476,7 @@ static void write_cloud_to_file(std::shared_ptr<pcMsg> msg)
         g_total_frame++;
     }
 }
-static void process_msg(std::shared_ptr<pcMsg> msg)
+void process_msg(std::shared_ptr<pcMsg> msg)
 {
     if (msg)
     {
@@ -515,7 +547,8 @@ void RS_DRIVER::start(const std::string &_file, int _interval_sec)
     }
     else
     {
-        driver.regPointCloudCallback(create_new_msg, process_msg);
+        driver.regPointCloudCallback(driverGetPointCloudFromCallerCallback, driverReturnPointCloudToCallerCallback);
+        std::thread(processCloud).detach();
     }
     g_rd_result.state = vehicle_position_detect_state::vehicle_postion_out;
     g_rd_result.is_full = false;
