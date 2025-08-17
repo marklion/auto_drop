@@ -39,8 +39,5 @@ public:
 
 };
 
-AD_INI_CONFIG *get_ini_config();
-void save_detect_result(const vehicle_rd_detect_result &result);
-vehicle_rd_detect_result get_detect_result();
 
 #endif // _PC_OPT_H_

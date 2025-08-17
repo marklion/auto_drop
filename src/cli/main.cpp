@@ -112,6 +112,11 @@ int un_safe_main(int argc, char const *argv[])
     }
     else
     {
+        if (access(argv[1], F_OK) != 0)
+        {
+            std::cerr << "File not found: " << argv[1] << std::endl;
+            return 1;
+        }
         std::fstream cmd_file(argv[1], std::ios::in);
         cli::CliFileSession cf(cli, cmd_file);
         cli_co = sc->add_co(
