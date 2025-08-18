@@ -13,7 +13,7 @@ const ws_server = new DataSyncServer({ port: 23312 });
 app.post('/api/update', async (req, res) => {
     const util = require('node:util');
     const exec = util.promisify(require('node:child_process').exec);
-    await exec(`cp ${req.file_path} /root/install.sh`);
+    await exec(`cp ${req.body.file_path} /root/install.sh`);
     await exec('chmod +x /root/install.sh');
     res.send({ err_msg: '' });
     await exec("kill -9 $(ps ax | grep core_daemon | grep -v grep | awk '{print $1}')");

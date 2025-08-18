@@ -82,10 +82,10 @@ export default {
             });
             this.renderer = renderer;
             camera.position.x = 0
-            camera.position.y = -1.5
-            camera.position.z = -2.5
+            camera.position.y = -2
+            camera.position.z = 0
             camera.up.set(0, 0, 1);
-            camera.lookAt(0, 0, -2);
+            camera.lookAt(0, 0, -2.3);
 
             // 创建点云容器
             const geometry = new THREE.BufferGeometry();
