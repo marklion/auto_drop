@@ -10,7 +10,7 @@ service runner_sm{
     string get_sm_state_string() throws (1:ad_gen_exp exp),
     oneway void stop_sm(),
     bool check_lua_code(1:string code, 2:bool real_run) throws (1:ad_gen_exp exp),
-    void reset_sm() throws (1:ad_gen_exp exp),
+    void send_sm_event(1:string event_name) throws (1:ad_gen_exp exp),
 }
 
 enum vehicle_position_detect_state{

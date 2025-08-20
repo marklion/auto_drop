@@ -10,9 +10,6 @@ void runner_sm_impl::push_sm_event(const std::string &event_name)
 
 void runner_sm_impl::get_sm_state_string(std::string &_return)
 {
-    ad_gen_exp exp;
-    exp.msg = "mock";
-    throw exp;
     _return = m_runner->m_current_state->m_state_name;
 }
 
@@ -78,7 +75,7 @@ bool runner_sm_impl::check_lua_code(const std::string &code, const bool is_real_
     return ret;
 }
 
-void runner_sm_impl::reset_sm()
+void runner_sm_impl::send_sm_event(const std::string &event_name)
 {
-    m_runner->trigger_sm_by_event(AD_CONST_SM_EVENT_RESET);
+    m_runner->trigger_sm_by_event(event_name);
 }

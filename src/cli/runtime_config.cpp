@@ -311,7 +311,32 @@ static void disable_log(std::ostream &out, std::vector<std::string> _params)
     }
 }
 
-void reset_sm(std::ostream &out, std::vector<std::string> _params)
+void send_sm_event(std::ostream &out, std::vector<std::string> _params)
+{
+    auto check_ret = common_cli::check_params(_params, 0, "事件名称");
+    if (check_ret.empty())
+    {
+        u16 sm_port = 0;
+        auto run_sm = ad_rpc_get_run_sm();
+        if (run_sm.size() > 0)
+        {
+            sm_port = run_sm[0].port;
+        }
+
+        if (sm_port > 0)
+        {
+            AD_RPC_SC::get_instance()->call_remote<runner_smClient>(
+                sm_port,
+                "runner_sm",
+                [&](runner_smClient &client)
+                {
+                    client.send_sm_event(_params[0]);
+                });
+        }
+    }
+}
+
+void show_sm_state(std::ostream &out, std::vector<std::string> _params)
 {
     u16 sm_port = 0;
     auto run_sm = ad_rpc_get_run_sm();
@@ -327,7 +352,9 @@ void reset_sm(std::ostream &out, std::vector<std::string> _params)
             "runner_sm",
             [&](runner_smClient &client)
             {
-                client.reset_sm();
+                std::string state_string;
+                client.get_sm_state_string(state_string);
+                out << state_string << std::endl;
             });
     }
 }
@@ -358,7 +385,8 @@ static std::unique_ptr<cli::Menu> make_runtime_menu()
     sm_menu->Insert(CLI_MENU_ITEM(open_log), "打开日志");
     sm_menu->Insert(CLI_MENU_ITEM(close_log), "关闭日志");
     sm_menu->Insert(CLI_MENU_ITEM(save_ply), "保存点云", {"设备名"});
-    sm_menu->Insert(CLI_MENU_ITEM(reset_sm), "重置状态机");
+    sm_menu->Insert(CLI_MENU_ITEM(send_sm_event), "手动事件触发状态机");
+    sm_menu->Insert(CLI_MENU_ITEM(show_sm_state), "显示状态机当前状态");
     return sm_menu;
 }
 

@@ -22,7 +22,7 @@ public:
     virtual bool clear_device(const std::string &use_for) override;
     virtual void stop_sm() override;
     virtual bool check_lua_code(const std::string &code, const bool is_real_run) override;
-    virtual void reset_sm() override;
+    virtual void send_sm_event(const std::string &event_name) override;
 };
 
 #endif // _SM_RPC_H_
