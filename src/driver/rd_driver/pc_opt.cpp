@@ -2,10 +2,12 @@
 #include <pcl/common/transforms.h>
 #include <pcl/common/impl/angles.hpp>
 #include <pcl/filters/passthrough.h>
+#include <pcl/filters/voxel_grid.h>
 #include <pcl/segmentation/sac_segmentation.h>
 #include <pcl/filters/extract_indices.h>
 #include <pcl/io/ply_io.h>
 #include <pcl/io/pcd_io.h>
+#include <pcl/segmentation/extract_clusters.h>
 #include <boost/filesystem.hpp>
 #include <rs_driver/api/lidar_driver.hpp>
 #include <rs_driver/msg/pcl_point_cloud_msg.hpp>
@@ -27,7 +29,8 @@ typedef PointCloudT<myPoint> pcMsg;
 
 robosense::lidar::SyncQueue<std::shared_ptr<pcMsg>> free_cloud_queue;
 robosense::lidar::SyncQueue<std::shared_ptr<pcMsg>> stuffed_cloud_queue;
-struct pc_after_pickup{
+struct pc_after_pickup
+{
     myPointCloud::Ptr last;
     myPointCloud::Ptr picked;
 };
@@ -36,6 +39,13 @@ static void save_detect_result(const vehicle_rd_detect_result &result);
 static vehicle_rd_detect_result get_detect_result();
 static void process_msg(std::shared_ptr<pcMsg> msg);
 static void serial_pc(pc_after_pickup &_pap);
+long long get_current_us_stamp()
+{
+    struct timeval tv;
+    gettimeofday(&tv, nullptr);
+    long long current_useconds = tv.tv_sec * 1000000LL + tv.tv_usec;
+    return current_useconds;
+}
 void processCloud(void)
 {
     while (true)
@@ -104,7 +114,46 @@ static void split_cloud_by_pt(myPointCloud::Ptr _cloud, const std::string &_fiel
     pass.setFilterLimitsNegative(true);
     pass.filter(*_cloud_last);
 }
-static myPointCloud::Ptr find_points_on_plane(myPointCloud::Ptr _cloud, const Eigen::Vector3f &_ax_vec, float _distance_threshold, float _angle_threshold, pcl::ModelCoefficients::Ptr &_coe)
+// 聚类函数
+static std::vector<myPointCloud::Ptr> cluster_plane_points(
+    myPointCloud::Ptr plane_points,
+    float cluster_tolerance = 0.02f, // 聚类距离容差
+    int min_cluster_size = 50,       // 最小聚类大小
+    int max_cluster_size = 25000     // 最大聚类大小
+)
+{
+    std::vector<myPointCloud::Ptr> clusters;
+
+    if (plane_points->empty())
+    {
+        return clusters;
+    }
+
+    // 创建KdTree用于搜索
+    pcl::search::KdTree<myPoint>::Ptr tree(new pcl::search::KdTree<myPoint>);
+    tree->setInputCloud(plane_points);
+
+    // 欧几里得聚类
+    std::vector<pcl::PointIndices> cluster_indices;
+    pcl::EuclideanClusterExtraction<myPoint> ec;
+    ec.setClusterTolerance(cluster_tolerance);
+    ec.setMinClusterSize(min_cluster_size);
+    ec.setMaxClusterSize(max_cluster_size);
+    ec.setSearchMethod(tree);
+    ec.setInputCloud(plane_points);
+    ec.extract(cluster_indices);
+
+    // 提取每个聚类
+    for (const auto &indices : cluster_indices)
+    {
+        myPointCloud::Ptr cluster(new myPointCloud);
+        pcl::copyPointCloud(*plane_points, indices, *cluster);
+        clusters.push_back(cluster);
+    }
+
+    return clusters;
+}
+static myPointCloud::Ptr find_points_on_plane(myPointCloud::Ptr _cloud, const Eigen::Vector3f &_ax_vec, float _distance_threshold, float _angle_threshold, pcl::ModelCoefficients::Ptr &_coe, float _cluster_distance_threshold)
 {
     auto ret = myPointCloud::Ptr(new myPointCloud);
     pcl::PointIndices::Ptr one_plane(new pcl::PointIndices);
@@ -119,24 +168,42 @@ static myPointCloud::Ptr find_points_on_plane(myPointCloud::Ptr _cloud, const Ei
     seg.setInputCloud(_cloud);
     seg.segment(*one_plane, *_coe);
 
-    for (auto &itr : _cloud->points)
-    {
-        itr.r = 0;
-        itr.g = 0;
-        itr.b = 255;
-    }
-
+    auto start_us_stamp = get_current_us_stamp();
     pcl::ExtractIndices<myPoint> extract;
     extract.setInputCloud(_cloud);
     extract.setIndices(one_plane);
     extract.setNegative(false);
     extract.filter(*ret);
+    auto end_us_stamp = get_current_us_stamp();
+    AD_LOGGER tmp_logger("LIDAR");
+    tmp_logger.log("extract plane points takes %ld us", end_us_stamp - start_us_stamp);
+
+    start_us_stamp = get_current_us_stamp();
+    auto after_cluster = cluster_plane_points(ret, _cluster_distance_threshold, 180, 999999999);
+    bool clustered_success = false;
+    if (!after_cluster.empty())
+    {
+        ret = after_cluster[0];
+        for (size_t i = 1; i < after_cluster.size(); ++i)
+        {
+            if (after_cluster[i]->points.size() > ret->points.size())
+            {
+                ret = after_cluster[i];
+            }
+        }
+        clustered_success = true;
+    }
     for (auto &itr : ret->points)
     {
         itr.r = 255;
-        itr.g = 255;
         itr.b = 0;
+        if (clustered_success)
+        {
+            itr.g = 255;
+        }
     }
+    end_us_stamp = get_current_us_stamp();
+    tmp_logger.log("cluster plane points takes %ld us", end_us_stamp - start_us_stamp);
 
     return ret;
 }
@@ -154,7 +221,7 @@ static std::pair<myPoint, myPoint> get_key_seg(myPointCloud::Ptr _cloud, float l
     float x_min = std::numeric_limits<float>::max();
     float x_max = std::numeric_limits<float>::min();
     float y_bar = 0;
-    //遍历点云找到 最小x,最大x, 平均y
+    // 遍历点云找到 最小x,最大x, 平均y
     for (const auto &point : _cloud->points)
     {
         if (point.x < x_min)
@@ -175,7 +242,7 @@ static std::pair<myPoint, myPoint> get_key_seg(myPointCloud::Ptr _cloud, float l
         all_z[i] = std::numeric_limits<float>::lowest();
     }
 
-    //在x轴方向分30份，找出每一份紧凑点集中的最大z值
+    // 在x轴方向分30份，找出每一份紧凑点集中的最大z值
     for (int i = 0; i < sizeof(all_z) / sizeof(float); i++)
     {
         for (const auto &point : _cloud->points)
@@ -186,7 +253,8 @@ static std::pair<myPoint, myPoint> get_key_seg(myPointCloud::Ptr _cloud, float l
             }
         }
     }
-    //计算得到一个平均最大z值的点
+
+    // 计算得到一个平均最大z值的点
     float total_z = 0;
     for (int i = 0; i < sizeof(all_z) / sizeof(float); i++)
     {
@@ -196,7 +264,7 @@ static std::pair<myPoint, myPoint> get_key_seg(myPointCloud::Ptr _cloud, float l
     max_z_point.x = 0;
     max_z_point.z += _full_z_offset;
 
-    //找出距离过上点平行于y轴的直线比较紧凑的若干点
+    // 找出距离过上点平行于y轴的直线比较紧凑的若干点
     std::vector<myPoint> line_points;
     Eigen::Vector3f key_line_dir(1, 0, 0);
     for (auto &itr : _cloud->points)
@@ -220,7 +288,7 @@ static std::pair<myPoint, myPoint> get_key_seg(myPointCloud::Ptr _cloud, float l
     auto end = line_points.front();
     float tmp_x = begin.x;
 
-    //找出刚才找到的点集中距离较大的两个点作为直线的两点并返回
+    // 找出刚才找到的点集中距离较大的两个点作为直线的两点并返回
     for (auto &itr : line_points)
     {
         if (itr.x - tmp_x < line_distance_threshold)
@@ -305,8 +373,6 @@ static void serializePointCloud(myPointCloud::Ptr cloud)
     close(fd);          // 关闭文件描述符
 }
 
-
-
 std::unique_ptr<pc_after_pickup> pickup_pc_from_spec_range(myPointCloud::Ptr _orig_pc)
 {
     const std::string config_sec = "get_state";
@@ -349,6 +415,7 @@ static std::unique_ptr<pc_after_pickup> pc_get_state(myPointCloud::Ptr _cloud)
     const std::string config_sec = "get_state";
 
     auto plane_DistanceThreshold = atof(get_ini_config()->get_config(config_sec, "plane_DistanceThreshold", "0.1").c_str());
+    auto cluster_DistanceThreshold = atof(get_ini_config()->get_config(config_sec, "cluster_DistanceThreshold", "0.1").c_str());
     auto line_DistanceThreshold = atof(get_ini_config()->get_config(config_sec, "line_DistanceThreshold", "0.1").c_str());
     auto AngleThreshold = atof(get_ini_config()->get_config(config_sec, "AngleThreshold", "0.1").c_str());
     auto E0 = atof(get_ini_config()->get_config(config_sec, "E0", "0.1").c_str());
@@ -364,10 +431,14 @@ static std::unique_ptr<pc_after_pickup> pc_get_state(myPointCloud::Ptr _cloud)
 
     // 在范围内点云中拟合垂直y轴的平面,范围内点云染蓝色，平面染黄色
     pcl::ModelCoefficients::Ptr coe_side(new pcl::ModelCoefficients);
-    auto side_points = find_points_on_plane(pickup_resp->picked, Eigen::Vector3f(0, 1, 0), plane_DistanceThreshold, AngleThreshold, coe_side);
+    auto side_points = find_points_on_plane(pickup_resp->picked, Eigen::Vector3f(0, 1, 0), plane_DistanceThreshold, AngleThreshold, coe_side, cluster_DistanceThreshold);
 
     // 取出关键线段
+    auto start_us_stamp = get_current_us_stamp();
     auto key_seg = get_key_seg(side_points, line_DistanceThreshold, plane_DistanceThreshold, 0, full_z_offset);
+    auto end_us_stamp = get_current_us_stamp();
+    AD_LOGGER tmp_logger("LIDAR");
+    tmp_logger.log("get key segment takes %ld us", end_us_stamp - start_us_stamp);
     if (key_seg.first.x != key_seg.second.x)
     {
         auto ex = key_seg.first.x;
@@ -467,6 +538,18 @@ static myPointCloud::Ptr pc_range_filter(myPointCloud::Ptr cloud)
 
     return cloud_filtered_z;
 }
+static myPointCloud::Ptr  pc_vox_filter(myPointCloud::Ptr cloud)
+{
+    const std::string config_sec = "voxel_filter";
+
+    auto leaf_size = atof(get_ini_config()->get_config(config_sec, "leaf_size", "0.02").c_str());
+    pcl::VoxelGrid<myPoint> voxel_filter;
+    voxel_filter.setInputCloud(cloud);
+    voxel_filter.setLeafSize(leaf_size, leaf_size, leaf_size);
+    myPointCloud::Ptr cloud_filtered(new myPointCloud);
+    voxel_filter.filter(*cloud_filtered);
+    return cloud_filtered;
+}
 
 static myPointCloud::Ptr pc_transform(myPointCloud::Ptr cloud)
 {
@@ -527,32 +610,24 @@ myPointCloud::Ptr make_cloud_by_msg(std::shared_ptr<pcMsg> _msg)
     return one_frame;
 }
 
-long long get_current_us_stamp()
-{
-    struct timeval tv;
-    gettimeofday(&tv, nullptr);
-    long long current_useconds = tv.tv_sec * 1000000LL + tv.tv_usec;
-    return current_useconds;
-}
-
 void process_msg(std::shared_ptr<pcMsg> msg)
 {
     if (msg)
     {
+        AD_LOGGER tmp_logger("LIDAR");
         auto one_frame = make_cloud_by_msg(msg);
-        auto start_us_stamp = get_current_us_stamp();
         g_full_cloud = one_frame;
         // 坐标转换
         auto frame_after_trans = pc_transform(one_frame);
         // 有效范围过滤
         auto frame_after_filter = pc_range_filter(frame_after_trans);
+        auto start_us_stamp = get_current_us_stamp();
+        frame_after_filter = pc_vox_filter(frame_after_filter);
+        auto end_us_stamp = get_current_us_stamp();
+        tmp_logger.log("voxel filter takes %ld us", end_us_stamp - start_us_stamp);
         // 计算关键数据
         auto pap = pc_get_state(frame_after_filter);
         serial_pc(*pap);
-
-        auto end_us_stamp = get_current_us_stamp();
-        AD_LOGGER tmp_logger("LIDAR");
-        tmp_logger.log("take %ld us", end_us_stamp - start_us_stamp);
     }
 }
 
