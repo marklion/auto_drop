@@ -24,7 +24,8 @@ public:
     int start_driver_daemon(int argc, char const *argv[]);
     void emit_event(const std::string &_event);
     virtual bool running_status_check() = 0;
-    virtual void save_ply_file(std::string &_return) {
+    virtual void save_ply_file(std::string &_return, const std::string &reason)
+    {
         _return = "mocked_ply_file.ply";
     }
 

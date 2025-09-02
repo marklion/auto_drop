@@ -63,7 +63,7 @@ service driver_service{
     oneway void sim_scale_weight(1:double weight),
     oneway void sim_vehicle_position(1:vehicle_position_detect_state state),
     oneway void sim_vehicle_stuff(1:bool is_full),
-    string save_ply_file() throws (1:ad_gen_exp exp),
+    string save_ply_file(1:string reason) throws (1:ad_gen_exp exp),
     oneway void set_lc_open(1:i32 thredhold),
     i32 get_lc_open() throws (1:ad_gen_exp exp),
     double get_scale_weight() throws (1:ad_gen_exp exp),

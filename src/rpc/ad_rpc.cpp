@@ -102,7 +102,7 @@ std::string ad_rpc_device_save_ply(const std::string &dev_name)
             port,
             [&](driver_serviceClient &client)
             {
-                client.save_ply_file(ret);
+                client.save_ply_file(ret, "");
             });
     }
 

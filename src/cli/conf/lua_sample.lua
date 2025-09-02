@@ -34,6 +34,9 @@ sm:dev_vehicle_rd_detect(device) 车辆雷达检测结果检测
 sm:dev_vehicle_passed_gate(device) 获取车辆是否通过闸机
     参数:device为闸机设备名称
     返回:是否通过
+sm:dev_save_ply(device, reason) 保存当前的点云
+    参数:device为设备名称
+        reason为保存原因
 sm:trigger_event(event_name) 触发事件
     参数:event_name为事件名称
 sm:call_http_api(url, method, body, header) 调用外部的http接口

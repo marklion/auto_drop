@@ -35,7 +35,7 @@ public:
         return;
     }
 
-    virtual void save_ply_file(std::string &_return);
+    virtual void save_ply_file(std::string &_return, const std::string &reason);
 
 };
 

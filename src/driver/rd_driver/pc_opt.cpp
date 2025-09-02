@@ -153,9 +153,9 @@ static std::vector<myPointCloud::Ptr> cluster_plane_points(
 
     return clusters;
 }
-static myPointCloud::Ptr find_points_on_plane(myPointCloud::Ptr _cloud, const Eigen::Vector3f &_ax_vec, float _distance_threshold, float _angle_threshold, pcl::ModelCoefficients::Ptr &_coe, float _cluster_distance_threshold)
+static myPointCloud::Ptr find_points_on_plane(myPointCloud::Ptr _cloud, const Eigen::Vector3f &_ax_vec, float _distance_threshold, float _angle_threshold, pcl::ModelCoefficients::Ptr &_coe, float _cluster_distance_threshold, int _cluster_require_points)
 {
-    auto ret = myPointCloud::Ptr(new myPointCloud);
+    auto picked_up = myPointCloud::Ptr(new myPointCloud);
     pcl::PointIndices::Ptr one_plane(new pcl::PointIndices);
     pcl::SACSegmentation<myPoint> seg;
     seg.setModelType(pcl::SACMODEL_PERPENDICULAR_PLANE);
@@ -173,27 +173,33 @@ static myPointCloud::Ptr find_points_on_plane(myPointCloud::Ptr _cloud, const Ei
     extract.setInputCloud(_cloud);
     extract.setIndices(one_plane);
     extract.setNegative(false);
-    extract.filter(*ret);
+    extract.filter(*picked_up);
     auto end_us_stamp = get_current_us_stamp();
-    AD_LOGGER tmp_logger("LIDAR");
+    AD_LOGGER tmp_logger("RIDAR");
     tmp_logger.log("extract plane points takes %ld us", end_us_stamp - start_us_stamp);
 
     start_us_stamp = get_current_us_stamp();
-    auto after_cluster = cluster_plane_points(ret, _cluster_distance_threshold, 180, 999999999);
+    auto after_cluster = cluster_plane_points(picked_up, _cluster_distance_threshold, _cluster_require_points, 999999999);
+    for (auto &itr:picked_up->points)
+    {
+        itr.r = 255;
+        itr.g = 0;
+        itr.b = 0;
+    }
     bool clustered_success = false;
     if (!after_cluster.empty())
     {
-        ret = after_cluster[0];
+        picked_up = after_cluster[0];
         for (size_t i = 1; i < after_cluster.size(); ++i)
         {
-            if (after_cluster[i]->points.size() > ret->points.size())
+            if (after_cluster[i]->points.size() > picked_up->points.size())
             {
-                ret = after_cluster[i];
+                picked_up= after_cluster[i];
             }
         }
         clustered_success = true;
     }
-    for (auto &itr : ret->points)
+    for (auto &itr : picked_up->points)
     {
         itr.r = 255;
         itr.b = 0;
@@ -205,7 +211,7 @@ static myPointCloud::Ptr find_points_on_plane(myPointCloud::Ptr _cloud, const Ei
     end_us_stamp = get_current_us_stamp();
     tmp_logger.log("cluster plane points takes %ld us", end_us_stamp - start_us_stamp);
 
-    return ret;
+    return picked_up;
 }
 static float pointToLineDistance(const Eigen::Vector3f &point, const Eigen::Vector3f &line_point, const Eigen::Vector3f &line_dir)
 {
@@ -424,26 +430,26 @@ static std::unique_ptr<pc_after_pickup> pc_get_state(myPointCloud::Ptr _cloud)
     auto B1 = atof(get_ini_config()->get_config(config_sec, "B1", "0.1").c_str());
     auto full_y_offset = atof(get_ini_config()->get_config(config_sec, "full_y_offset", "0.1").c_str());
     auto full_z_offset = atof(get_ini_config()->get_config(config_sec, "full_z_offset", "0.1").c_str());
-    auto line_require_points = atoi(get_ini_config()->get_config(config_sec, "line_require_points", "10").c_str());
+    auto cluster_require_points = atoi(get_ini_config()->get_config(config_sec, "cluster_require_points", "200").c_str());
 
     // 取出关心范围内的点云
     auto pickup_resp = pickup_pc_from_spec_range(_cloud);
 
     // 在范围内点云中拟合垂直y轴的平面,范围内点云染蓝色，平面染黄色
     pcl::ModelCoefficients::Ptr coe_side(new pcl::ModelCoefficients);
-    auto side_points = find_points_on_plane(pickup_resp->picked, Eigen::Vector3f(0, 1, 0), plane_DistanceThreshold, AngleThreshold, coe_side, cluster_DistanceThreshold);
+    auto side_points = find_points_on_plane(pickup_resp->picked, Eigen::Vector3f(0, 1, 0), plane_DistanceThreshold, AngleThreshold, coe_side, cluster_DistanceThreshold, cluster_require_points);
 
     // 取出关键线段
     auto start_us_stamp = get_current_us_stamp();
     auto key_seg = get_key_seg(side_points, line_DistanceThreshold, plane_DistanceThreshold, 0, full_z_offset);
     auto end_us_stamp = get_current_us_stamp();
-    AD_LOGGER tmp_logger("LIDAR");
+    AD_LOGGER tmp_logger("RIDAR");
     tmp_logger.log("get key segment takes %ld us", end_us_stamp - start_us_stamp);
     if (key_seg.first.x != key_seg.second.x)
     {
         auto ex = key_seg.first.x;
         auto bx = key_seg.second.x;
-        AD_LOGGER tmp_logger("LIDAR");
+        AD_LOGGER tmp_logger("RIDAR");
         tmp_logger.log("ex:%f, bx:%f", ex, bx);
         if (ex <= E0 && bx >= B_0 && bx <= B1)
         {
@@ -475,25 +481,6 @@ static std::unique_ptr<pc_after_pickup> pc_get_state(myPointCloud::Ptr _cloud)
                     itr.b = 0;
                 }
             }
-            auto full_seg = get_key_seg(focus_side, line_DistanceThreshold, plane_DistanceThreshold, full_y_offset, full_z_offset);
-            insert_several_points(pickup_resp->last, full_seg.first, full_seg.second, true);
-            long full_detect_count = 0;
-            for (auto &itr : pickup_resp->picked->points)
-            {
-                if (itr.x > E1 && itr.x < B_0 && plane_DistanceThreshold > pointToLineDistance(itr.getVector3fMap(), full_seg.first.getVector3fMap(), Eigen::Vector3f(1, 0, 0)))
-                {
-                    full_detect_count++;
-                }
-            }
-            if (full_detect_count > line_require_points)
-            {
-                ret.is_full = true;
-            }
-            else
-            {
-                ret.is_full = false;
-            }
-            tmp_logger.log("full_detect_count:%ld", full_detect_count);
         }
     }
     insert_several_points(pickup_resp->last, key_seg.first, key_seg.second);
@@ -614,7 +601,7 @@ void process_msg(std::shared_ptr<pcMsg> msg)
 {
     if (msg)
     {
-        AD_LOGGER tmp_logger("LIDAR");
+        AD_LOGGER tmp_logger("RIDAR");
         auto one_frame = make_cloud_by_msg(msg);
         g_full_cloud = one_frame;
         // 坐标转换
@@ -718,10 +705,12 @@ void RS_DRIVER::start(const std::string &_file, int _interval_sec)
     }
 }
 
-void RS_DRIVER::save_ply_file(std::string &_return)
+void RS_DRIVER::save_ply_file(std::string &_return, const std::string &reason)
 {
-    _return = "/database/cur.ply";
-    std::string full_ply = "/database/cur-full.ply";
+    auto date_string = ad_utils_date_time().m_datetime;
+    std::string ply_file_name = reason + "_" + date_string + ".ply";
+    _return = "/database/" + ply_file_name;
+    std::string full_ply = "/database/full_" + ply_file_name;
     std::lock_guard<std::mutex> lock(g_rd_result_mutex);
     save_ply(g_cur_cloud, _return);
     save_ply(g_full_cloud, full_ply);
@@ -742,7 +731,7 @@ AD_INI_CONFIG *get_ini_config()
 void save_detect_result(const vehicle_rd_detect_result &result)
 {
     std::lock_guard<std::mutex> lock(g_rd_result_mutex);
-    AD_LOGGER tmp_log("LIDAR");
+    AD_LOGGER tmp_log("RIDAR");
     tmp_log.log(AD_LOGGER::INFO, "save_detect_result: %d %d", result.state, result.is_full);
     g_rd_result = result;
 }

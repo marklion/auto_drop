@@ -154,6 +154,16 @@ public:
                 client.gate_control(is_close);
             });
     }
+    void dev_save_ply(const std::string &_dev_name, const std::string &_reason)
+    {
+        rpc_wrapper_call_device(
+            get_device(_dev_name),
+            [&](driver_serviceClient &client)
+            {
+                std::string ret;
+                client.save_ply_file(ret, _reason);
+            });
+    }
     std::string dev_get_trigger_vehicle_plate(const std::string &_dev_name)
     {
         std::string ret;
