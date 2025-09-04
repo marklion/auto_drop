@@ -12,6 +12,10 @@
                     <el-progress :percentage="current_state.lc_open_threshold"></el-progress>
                 </div>
             </el-descriptions-item>
+            <el-descriptions-item label="车厢高度">{{current_state.rd_height}}</el-descriptions-item>
+            <el-descriptions-item label="最大体积">{{current_state.rd_max_volume}}</el-descriptions-item>
+            <el-descriptions-item label="当前体积">{{current_state.rd_cur_volume}}</el-descriptions-item>
+            <el-descriptions-item v-if="current_state.rd_max_volume > 0" label="体积占率">{{current_state.rd_cur_volume / current_state.rd_max_volume}}</el-descriptions-item>
             <el-descriptions-item label="车辆位置">
                 <el-tag type="primary" size="mini" v-if="current_state.rd_position == 0">初段</el-tag>
                 <el-tag type="success" size="mini" v-else-if="current_state.rd_position == 1">中段</el-tag>
@@ -40,6 +44,9 @@ export default {
                 rd_position: 0,
                 rd_full: false,
                 scale_weight: 0,
+                rd_max_volume: 0,
+                rd_cur_volume: 0,
+                rd_height: 0,
             },
         }
     },

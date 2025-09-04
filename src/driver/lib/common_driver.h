@@ -12,11 +12,13 @@ class common_driver : public driver_serviceIf, public std::enable_shared_from_th
     bool m_gate_is_close = false;
     double m_current_weight = 0;
     int32_t m_lc_open_threshold = 0;
+
 protected:
     AD_LOGGER m_logger;
     u16 m_sm_port = 0;
+
 public:
-    common_driver(const std::string &_driver_name) : m_logger( _driver_name)
+    common_driver(const std::string &_driver_name) : m_logger(_driver_name)
     {
     }
     virtual bool set_sm(const u16 sm_port) override final;
@@ -35,6 +37,9 @@ public:
     virtual void sim_gate_status(const bool is_close) override final;
     virtual void sim_scale_weight(const double weight) override final;
     virtual void sim_vehicle_position(const vehicle_position_detect_state::type state) override final;
+    virtual void sim_vehicle_max_volume(const double volume) override final;
+    virtual void sim_vehicle_cur_volume(const double volume) override final;
+    virtual void sim_vehicle_height(const double height) override final;
     virtual void sim_vehicle_stuff(const bool is_full) override final;
     virtual bool vehicle_passed_gate() override final;
     virtual void set_lc_open(const int32_t thredhold);

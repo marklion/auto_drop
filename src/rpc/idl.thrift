@@ -23,6 +23,9 @@ enum vehicle_position_detect_state{
 struct vehicle_rd_detect_result {
     1: vehicle_position_detect_state state,
     2: bool is_full,
+    3: double height,
+    4: double max_volume,
+    5: double cur_volume,
 }
 
 struct device_config {
@@ -62,6 +65,9 @@ service driver_service{
     oneway void sim_gate_status(1:bool is_close),
     oneway void sim_scale_weight(1:double weight),
     oneway void sim_vehicle_position(1:vehicle_position_detect_state state),
+    oneway void sim_vehicle_max_volume(1:double volume),
+    oneway void sim_vehicle_cur_volume(1:double volume),
+    oneway void sim_vehicle_height(1:double height),
     oneway void sim_vehicle_stuff(1:bool is_full),
     string save_ply_file(1:string reason) throws (1:ad_gen_exp exp),
     oneway void set_lc_open(1:i32 thredhold),
