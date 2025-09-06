@@ -33,18 +33,32 @@ struct pc_after_pickup
 {
     myPointCloud::Ptr last;
     myPointCloud::Ptr picked;
+    pc_after_pickup() : last(new myPointCloud), picked(new myPointCloud)
+    {
+    }
+};
+struct pc_after_split {
+    myPointCloud::Ptr legal_side;
+    myPointCloud::Ptr illegal_side;
+    myPointCloud::Ptr content;
+    pc_after_split() : legal_side(new myPointCloud), illegal_side(new myPointCloud), content(new myPointCloud)
+    {
+    }
 };
 static AD_INI_CONFIG *get_ini_config();
 static void save_detect_result(const vehicle_rd_detect_result &result);
 static vehicle_rd_detect_result get_detect_result();
 static void process_msg(std::shared_ptr<pcMsg> msg);
 static void serial_pc();
-static myPointCloud::Ptr g_before_clustered_cloud;
 static myPointCloud::Ptr g_cur_cloud;
 static myPointCloud::Ptr g_output_cloud;
+static myPointCloud::Ptr g_full_cloud;
 static void put_cloud(myPointCloud::Ptr _cloud)
 {
-    *g_cur_cloud += *_cloud;
+    if (g_cur_cloud)
+    {
+        *g_cur_cloud += *_cloud;
+    }
 }
 static myPointCloud::Ptr get_cur_cloud()
 {
@@ -54,6 +68,22 @@ static myPointCloud::Ptr get_cur_cloud()
 
     return ret;
 }
+static myPointCloud::Ptr get_full_cloud()
+{
+    myPointCloud::Ptr ret(new myPointCloud);
+    std::lock_guard<std::recursive_mutex> lock(g_rd_result_mutex);
+    if (g_full_cloud)
+    {
+        pcl::copyPointCloud(*g_full_cloud, *ret);
+    }
+
+    return ret;
+}
+static void save_full_cloud(myPointCloud::Ptr _cloud)
+{
+    std::lock_guard<std::recursive_mutex> lock(g_rd_result_mutex);
+    g_full_cloud = _cloud;
+}
 static void update_cur_cloud()
 {
     std::lock_guard<std::recursive_mutex> lock(g_rd_result_mutex);
@@ -62,7 +92,7 @@ static void update_cur_cloud()
 }
 static void color_cloud(int r, int g, int b, myPointCloud::Ptr _cloud)
 {
-    for (auto &itr:_cloud->points)
+    for (auto &itr : _cloud->points)
     {
         itr.r = r;
         itr.g = g;
@@ -213,25 +243,20 @@ static pc_after_pickup find_points_on_plane(myPointCloud::Ptr _cloud, const Eige
 
     start_us_stamp = get_current_us_stamp();
     auto after_cluster = cluster_plane_points(picked_up, _cluster_distance_threshold, _cluster_require_points, 999999999);
-    g_before_clustered_cloud = picked_up;
     bool clustered_success = false;
     if (!after_cluster.empty())
     {
         picked_up = after_cluster[0];
-        color_cloud(255, 255, 0, picked_up);
         for (size_t i = 1; i < after_cluster.size(); ++i)
         {
             if (after_cluster[i]->points.size() > picked_up->points.size())
             {
                 picked_up = after_cluster[i];
-                color_cloud(255, 255, 0, after_cluster[i]);
-                color_cloud(255, 0, 0, picked_up);
-                put_cloud(picked_up);
+                *last += *picked_up;
             }
             else
             {
-                color_cloud(255, 0, 0, after_cluster[i]);
-                put_cloud(after_cluster[i]);
+                *last += *(after_cluster[i]);
             }
         }
         clustered_success = true;
@@ -393,7 +418,6 @@ static void insert_several_points(myPointCloud::Ptr _cloud, const myPoint &p1, c
     }
     _cloud->points.push_back(p2);
 }
-static myPointCloud::Ptr g_full_cloud;
 static int g_update_counter = 0; // 添加一个全局计数器
 static void serializePointCloud(myPointCloud::Ptr cloud)
 {
@@ -445,9 +469,6 @@ std::unique_ptr<pc_after_pickup> pickup_pc_from_spec_range(myPointCloud::Ptr _or
     auto result = std::make_unique<pc_after_pickup>();
     myPointCloud::Ptr tmp(new myPointCloud);
 
-    result->last = myPointCloud::Ptr(new myPointCloud);
-    result->picked = myPointCloud::Ptr(new myPointCloud);
-
     split_cloud_by_pt(_orig_pc, "x", x_min, x_max, result->picked, tmp);
     *result->last += *tmp;
     split_cloud_by_pt(result->picked, "y", y_min, y_max, result->picked, tmp);
@@ -484,7 +505,6 @@ static grid_volume_detial calc_grid_volume(myPointCloud::Ptr _cloud, float _x_mi
     split_cloud_by_pt(cloud_filtered_x, "y", _y_min, _y_max, cloud_filtered_y, y_last);
 
     *y_last += *x_last;
-    put_cloud(y_last);
 
     float height = 0;
     if (cloud_filtered_y->points.size() > 0)
@@ -495,8 +515,6 @@ static grid_volume_detial calc_grid_volume(myPointCloud::Ptr _cloud, float _x_mi
             height += (itr.z - _bottom_z);
         }
         height = height / cloud_filtered_y->points.size();
-        color_cloud(0, 255, 255, cloud_filtered_y);
-        put_cloud(cloud_filtered_y);
     }
 
     ret.volume = height * (_x_max - _x_min) * (_y_max - _y_min);
@@ -575,40 +593,60 @@ static myPointCloud::Ptr draw_line_x(float _x, float _z)
     return ret;
 }
 
-static std::unique_ptr<pc_after_pickup> pc_get_state(myPointCloud::Ptr _cloud)
+static pc_after_split split_cloud_to_side_and_content(myPointCloud::Ptr _cloud)
 {
-    update_cur_cloud();
-    vehicle_rd_detect_result ret;
-    ret.is_full = false;
-    ret.state = vehicle_position_detect_state::vehicle_postion_out;
     const std::string config_sec = "get_state";
 
     auto plane_DistanceThreshold = atof(get_ini_config()->get_config(config_sec, "plane_DistanceThreshold", "0.1").c_str());
     auto cluster_DistanceThreshold = atof(get_ini_config()->get_config(config_sec, "cluster_DistanceThreshold", "0.1").c_str());
-    auto line_DistanceThreshold = atof(get_ini_config()->get_config(config_sec, "line_DistanceThreshold", "0.1").c_str());
     auto AngleThreshold = atof(get_ini_config()->get_config(config_sec, "AngleThreshold", "0.1").c_str());
-    auto E0 = atof(get_ini_config()->get_config(config_sec, "E0", "0.1").c_str());
-    auto E1 = atof(get_ini_config()->get_config(config_sec, "E1", "0.1").c_str());
-    auto B_0 = atof(get_ini_config()->get_config(config_sec, "B0", "0.1").c_str());
-    auto B1 = atof(get_ini_config()->get_config(config_sec, "B1", "0.1").c_str());
-    auto full_y_offset = atof(get_ini_config()->get_config(config_sec, "full_y_offset", "0.1").c_str());
-    auto full_z_offset = atof(get_ini_config()->get_config(config_sec, "full_z_offset", "0.1").c_str());
     auto cluster_require_points = atoi(get_ini_config()->get_config(config_sec, "cluster_require_points", "200").c_str());
 
-    // 取出关心范围内的点云
+    auto start_us_stamp = get_current_us_stamp();
+    pc_after_split ret;
     auto pickup_resp = pickup_pc_from_spec_range(_cloud);
+    ret.content = pickup_resp->last;
+    color_cloud(255, 0, 255, ret.content);
 
     // 在范围内点云中拟合垂直y轴的平面,范围内点云染蓝色，平面染黄色
     pcl::ModelCoefficients::Ptr coe_side(new pcl::ModelCoefficients);
     auto fpop_ret = find_points_on_plane(pickup_resp->picked, Eigen::Vector3f(0, 1, 0), plane_DistanceThreshold, AngleThreshold, coe_side, cluster_DistanceThreshold, cluster_require_points);
-    auto side_points = fpop_ret.picked;
+    ret.legal_side = fpop_ret.picked;
+    color_cloud(255, 255, 0, ret.legal_side);
+    ret.illegal_side = fpop_ret.last;
+    color_cloud(255, 0, 0, ret.illegal_side);
 
-    // 取出关键线段
-    auto start_us_stamp = get_current_us_stamp();
-    auto key_seg = get_key_seg(side_points, line_DistanceThreshold, plane_DistanceThreshold, 0, full_z_offset);
     auto end_us_stamp = get_current_us_stamp();
     AD_LOGGER tmp_logger("RIDAR");
-    tmp_logger.log("get key segment takes %ld us", end_us_stamp - start_us_stamp);
+    tmp_logger.log("split cloud takes %ld us", end_us_stamp - start_us_stamp);
+    return ret;
+}
+
+struct key_seg_params
+{
+    float x_min = 0;
+    float x_max = 0;
+    float y = 0;
+    float z = 0;
+    vehicle_position_detect_state::type state = vehicle_position_detect_state::vehicle_postion_out;
+};
+
+static key_seg_params get_position_state_from_cloud(myPointCloud::Ptr _cloud)
+{
+    key_seg_params ret;
+    const std::string config_sec = "get_state";
+
+    auto plane_DistanceThreshold = atof(get_ini_config()->get_config(config_sec, "plane_DistanceThreshold", "0.1").c_str());
+    auto line_DistanceThreshold = atof(get_ini_config()->get_config(config_sec, "line_DistanceThreshold", "0.1").c_str());
+    auto E0 = atof(get_ini_config()->get_config(config_sec, "E0", "0.1").c_str());
+    auto E1 = atof(get_ini_config()->get_config(config_sec, "E1", "0.1").c_str());
+    auto B_0 = atof(get_ini_config()->get_config(config_sec, "B0", "0.1").c_str());
+    auto B1 = atof(get_ini_config()->get_config(config_sec, "B1", "0.1").c_str());
+    auto full_z_offset = atof(get_ini_config()->get_config(config_sec, "full_z_offset", "0.1").c_str());
+
+    auto key_seg = get_key_seg(_cloud, line_DistanceThreshold, plane_DistanceThreshold, 0, full_z_offset);
+    insert_several_points(_cloud, key_seg.first, key_seg.second);
+
     if (key_seg.first.x != key_seg.second.x)
     {
         auto ex = key_seg.first.x;
@@ -631,35 +669,46 @@ static std::unique_ptr<pc_after_pickup> pc_get_state(myPointCloud::Ptr _cloud)
         {
             ret.state = vehicle_position_detect_state::vehicle_postion_out;
         }
-        ret.is_full = false;
-        if (ret.state != vehicle_position_detect_state::vehicle_postion_out)
-        {
-            color_cloud(0, 255, 0, side_points);
-            *pickup_resp->last += *fpop_ret.last;
-            auto vehicle_detail = vehicle_is_full(side_points, line_DistanceThreshold, key_seg.first.z, key_seg.first.x, key_seg.second.x, key_seg.first.y, pickup_resp->last);
-            ret.is_full = vehicle_detail.is_full;
-            ret.cur_volume = vehicle_detail.cur_volume;
-            ret.height = vehicle_detail.height;
-            ret.max_volume = vehicle_detail.max_volume;
-        }
-        else
-        {
-            put_cloud(pickup_resp->last);
-        }
-        put_cloud(side_points);
+        ret.x_min = key_seg.first.x;
+        ret.x_max = key_seg.second.x;
+        ret.y = key_seg.first.y;
+        ret.z = key_seg.first.z;
     }
-    insert_several_points(g_cur_cloud, key_seg.first, key_seg.second);
     auto line_z = key_seg.first.z;
-    put_cloud(draw_line_x(E0, line_z));
-    put_cloud(draw_line_x(E1, line_z));
-    put_cloud(draw_line_x(B_0, line_z));
-    put_cloud(draw_line_x(B1, line_z));
+    *_cloud += *draw_line_x(E0, line_z);
+    *_cloud += *draw_line_x(E1, line_z);
+    *_cloud += *draw_line_x(B_0, line_z);
+    *_cloud += *draw_line_x(B1, line_z);
 
-    *pickup_resp->last += *side_points;
-    *pickup_resp->last += *pickup_resp->picked;
-    save_detect_result(ret);
+    return ret;
+}
 
-    return pickup_resp;
+static vehicle_rd_detect_result pc_get_state(myPointCloud::Ptr _cloud)
+{
+    vehicle_rd_detect_result ret;
+    ret.is_full = true;
+    ret.state = vehicle_position_detect_state::vehicle_postion_out;
+
+    const std::string config_sec = "get_state";
+    auto line_DistanceThreshold = atof(get_ini_config()->get_config(config_sec, "line_DistanceThreshold", "0.1").c_str());
+
+    auto pc_after_split_ret = split_cloud_to_side_and_content(_cloud);
+    auto key_seg_ret = get_position_state_from_cloud(pc_after_split_ret.legal_side);
+    ret.state = key_seg_ret.state;
+    if (ret.state != vehicle_position_detect_state::vehicle_postion_out)
+    {
+        auto vehicle_detail = vehicle_is_full(pc_after_split_ret.legal_side, line_DistanceThreshold, key_seg_ret.z, key_seg_ret.x_min, key_seg_ret.x_max, key_seg_ret.y, pc_after_split_ret.content);
+        ret.is_full = vehicle_detail.is_full;
+        ret.cur_volume = vehicle_detail.cur_volume;
+        ret.height = vehicle_detail.height;
+        ret.max_volume = vehicle_detail.max_volume;
+    }
+    put_cloud(pc_after_split_ret.content);
+    put_cloud(pc_after_split_ret.legal_side);
+    put_cloud(pc_after_split_ret.illegal_side);
+    update_cur_cloud();
+
+    return ret;
 }
 static myPointCloud::Ptr pc_range_filter(myPointCloud::Ptr cloud)
 {
@@ -782,17 +831,16 @@ void process_msg(std::shared_ptr<pcMsg> msg)
     {
         AD_LOGGER tmp_logger("RIDAR");
         auto one_frame = make_cloud_by_msg(msg);
+        save_full_cloud(one_frame);
         // 坐标转换
         auto frame_after_trans = pc_transform(one_frame);
         // 有效范围过滤
         auto frame_after_filter = pc_range_filter(frame_after_trans);
-        auto start_us_stamp = get_current_us_stamp();
+        // 体素滤波
         frame_after_filter = pc_vox_filter(frame_after_filter);
-        g_full_cloud = frame_after_filter;
-        auto end_us_stamp = get_current_us_stamp();
-        tmp_logger.log("voxel filter takes %ld us", end_us_stamp - start_us_stamp);
         // 计算关键数据
-        pc_get_state(frame_after_filter);
+        auto detect_ret = pc_get_state(frame_after_filter);
+        save_detect_result(detect_ret);
         serial_pc();
     }
 }
@@ -893,11 +941,8 @@ void RS_DRIVER::save_ply_file(std::string &_return, const std::string &reason)
     std::string ply_file_name = reason + "_" + date_string + ".ply";
     _return = "/database/" + ply_file_name;
     std::string full_ply = "/database/full_" + ply_file_name;
-    std::string before_clustered_ply = "/database/bc_" + ply_file_name;
-    std::lock_guard<std::recursive_mutex> lock(g_rd_result_mutex);
     save_ply(get_cur_cloud(), _return);
-    save_ply(g_full_cloud, full_ply);
-    save_ply(g_before_clustered_cloud, before_clustered_ply);
+    save_ply(get_full_cloud(), full_ply);
 }
 
 bool should_stop_walk()
