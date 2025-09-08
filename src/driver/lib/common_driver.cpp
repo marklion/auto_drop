@@ -77,31 +77,26 @@ void common_driver::sim_scale_weight(const double weight)
 void common_driver::sim_vehicle_position(const vehicle_position_detect_state::type state)
 {
     m_rd_result.state = state;
-    ad_rpc_update_current_state();
 }
 
 void common_driver::sim_vehicle_max_volume(const double volume)
 {
     m_rd_result.max_volume = volume;
-    ad_rpc_update_current_state();
 }
 
 void common_driver::sim_vehicle_cur_volume(const double volume)
 {
     m_rd_result.cur_volume = volume;
-    ad_rpc_update_current_state();
 }
 
 void common_driver::sim_vehicle_height(const double height)
 {
     m_rd_result.height = height;
-    ad_rpc_update_current_state();
 }
 
 void common_driver::sim_vehicle_stuff(const bool is_full)
 {
     m_rd_result.is_full = is_full;
-    ad_rpc_update_current_state();
 }
 
 bool common_driver::vehicle_passed_gate()
