@@ -8,6 +8,7 @@
 #include <pcl/io/ply_io.h>
 #include <pcl/io/pcd_io.h>
 #include <pcl/segmentation/extract_clusters.h>
+#include <pcl/common/pca.h>
 #include <boost/filesystem.hpp>
 #include <rs_driver/api/lidar_driver.hpp>
 #include <rs_driver/msg/pcl_point_cloud_msg.hpp>
@@ -29,6 +30,19 @@ typedef PointCloudT<pcl::PointXYZI> pcMsg;
 
 robosense::lidar::SyncQueue<std::shared_ptr<pcMsg>> free_cloud_queue;
 robosense::lidar::SyncQueue<std::shared_ptr<pcMsg>> stuffed_cloud_queue;
+
+static void rd_print_log(const std::string &_format, ...)
+{
+    char buffer[1024];
+    va_list args;
+    va_start(args, _format);
+    vsnprintf(buffer, sizeof(buffer), _format.c_str(), args);
+    va_end(args);
+
+    AD_LOGGER tmp_logger("RIDAR");
+    tmp_logger.log("%s", buffer);
+}
+
 struct pc_after_pickup
 {
     myPointCloud::Ptr last;
@@ -115,7 +129,11 @@ void processCloud(void)
         {
             continue;
         }
+        auto begin_us_stamp = get_current_us_stamp();
+        rd_print_log("====start to process one cloud====");
         process_msg(msg);
+        auto end_us_stamp = get_current_us_stamp();
+        rd_print_log("====process one cloud takes %ld us====", end_us_stamp - begin_us_stamp);
         free_cloud_queue.push(msg);
     }
 }
@@ -131,10 +149,9 @@ std::shared_ptr<pcMsg> driverGetPointCloudFromCallerCallback(void)
 }
 void driverReturnPointCloudToCallerCallback(std::shared_ptr<pcMsg> msg)
 {
-    AD_LOGGER tmp_logger("RIDAR");
     if (stuffed_cloud_queue.size() > 1)
     {
-        tmp_logger.log("stuffed_cloud_queue size is %zu", stuffed_cloud_queue.size());
+        rd_print_log("stuffed_cloud_queue size is %zu", stuffed_cloud_queue.size());
     }
     stuffed_cloud_queue.push(msg);
 }
@@ -222,7 +239,6 @@ static std::vector<myPointCloud::Ptr> cluster_plane_points(
 static pc_after_pickup find_max_cluster(myPointCloud::Ptr _cloud, float _cluster_distance_threshold, int _cluster_require_points)
 {
     pc_after_pickup ret;
-    auto start_us_stamp = get_current_us_stamp();
     auto picked_up = _cloud;
     auto after_cluster = cluster_plane_points(picked_up, _cluster_distance_threshold, _cluster_require_points, 999999999);
     if (!after_cluster.empty())
@@ -241,9 +257,6 @@ static pc_after_pickup find_max_cluster(myPointCloud::Ptr _cloud, float _cluster
             }
         }
     }
-    auto end_us_stamp = get_current_us_stamp();
-    AD_LOGGER tmp_logger("RIDAR");
-    tmp_logger.log("cluster plane points takes %ld us", end_us_stamp - start_us_stamp);
     ret.picked = picked_up;
 
     return ret;
@@ -264,7 +277,6 @@ static pc_after_pickup find_points_on_plane(myPointCloud::Ptr _cloud, const Eige
     seg.setInputCloud(_cloud);
     seg.segment(*one_plane, *_coe);
 
-    auto start_us_stamp = get_current_us_stamp();
     pcl::ExtractIndices<myPoint> extract;
     extract.setInputCloud(_cloud);
     extract.setIndices(one_plane);
@@ -273,9 +285,6 @@ static pc_after_pickup find_points_on_plane(myPointCloud::Ptr _cloud, const Eige
     auto last = myPointCloud::Ptr(new myPointCloud);
     extract.setNegative(true);
     extract.filter(*last);
-    auto end_us_stamp = get_current_us_stamp();
-    AD_LOGGER tmp_logger("RIDAR");
-    tmp_logger.log("extract plane points takes %ld us", end_us_stamp - start_us_stamp);
 
     pc_after_pickup ret;
     ret.picked = picked_up;
@@ -503,11 +512,12 @@ void serial_pc()
 struct grid_volume_detial
 {
     float volume = 0;
+    float max_volume = 0;
     myPointCloud::Ptr cloud;
     myPointCloud::Ptr last_cloud;
 };
 
-static grid_volume_detial calc_grid_volume(myPointCloud::Ptr _cloud, float _x_min, float _x_max, float _y_min, float _y_max, float _bottom_z)
+static grid_volume_detial calc_grid_volume(myPointCloud::Ptr _cloud, float _x_min, float _x_max, float _y_min, float _y_max, float _bottom_z, float _top_z)
 {
     grid_volume_detial ret;
 
@@ -519,20 +529,43 @@ static grid_volume_detial calc_grid_volume(myPointCloud::Ptr _cloud, float _x_mi
     split_cloud_by_pt(cloud_filtered_x, "y", _y_min, _y_max, cloud_filtered_y, y_last);
 
     *y_last += *x_last;
-
-    float height = 0;
-    if (cloud_filtered_y->points.size() > 0)
+    bool is_vertical = false;
+    try
     {
-        ret.cloud = cloud_filtered_y;
-        ret.last_cloud = y_last;
-        for (auto &itr : cloud_filtered_y->points)
-        {
-            height += (itr.z - _bottom_z);
-        }
-        height = height / cloud_filtered_y->points.size();
+        pcl::PCA<myPoint> pca;
+        pca.setInputCloud(cloud_filtered_y);
+        auto eig_vec = pca.getEigenVectors();
+        auto z_axis = eig_vec.col(2);
+        Eigen::Vector3f target_z_axis(0, 0, 1);
+        float dot_product = z_axis.dot(target_z_axis);
+        is_vertical = (std::fabs(dot_product) < 0.25);
+    }
+    catch (...)
+    {
     }
 
-    ret.volume = height * (_x_max - _x_min) * (_y_max - _y_min);
+    ret.last_cloud = y_last;
+    float height = 0;
+    if (is_vertical)
+    {
+        *ret.last_cloud += *cloud_filtered_y;
+    }
+    else
+    {
+        ret.cloud = cloud_filtered_y;
+        if (cloud_filtered_y->points.size() > 0)
+        {
+            for (auto &itr : cloud_filtered_y->points)
+            {
+                height += (itr.z - _bottom_z);
+            }
+            height = height / cloud_filtered_y->points.size();
+        }
+    }
+    auto bottom_area = (_x_max - _x_min) * (_y_max - _y_min);
+
+    ret.max_volume = (_top_z - _bottom_z) * bottom_area;
+    ret.volume = height * bottom_area;
 
     return ret;
 }
@@ -552,7 +585,6 @@ struct vehicle_detail_info
 static vehicle_detail_info vehicle_is_full(myPointCloud::Ptr _cloud, float _line_DistanceThreshold, float _max_z, float _x_min, float _x_max, float _y, myPointCloud::Ptr _full_cloud)
 {
     vehicle_detail_info ret;
-    AD_LOGGER tmp_logger("RIDAR");
     auto begin_us_timestamp = get_current_us_stamp();
     const std::string config_sec = "get_state";
 
@@ -566,18 +598,19 @@ static vehicle_detail_info vehicle_is_full(myPointCloud::Ptr _cloud, float _line
     auto min_z = min_z_point->z;
     auto max_height = _max_z - min_z;
     auto cur_length = _x_max - _x_min;
-    auto max_volume = max_height * cur_length * spec_width;
 
     auto grid_x = cur_length / x_grid_number;
     auto grid_y = spec_width / y_grid_number;
     float total_volume = 0;
+    float max_volume = 0;
     ret.last_clouds = _full_cloud;
     for (auto i = 0; i < x_grid_number; i++)
     {
         for (auto j = 0; j < y_grid_number; j++)
         {
-            auto grid_volume_detail = calc_grid_volume(ret.last_clouds, _x_min + i * grid_x, _x_min + (i + 1) * grid_x, _y + j * grid_y, _y + (j + 1) * grid_y, min_z);
+            auto grid_volume_detail = calc_grid_volume(ret.last_clouds, _x_min + i * grid_x, _x_min + (i + 1) * grid_x, _y + j * grid_y, _y + (j + 1) * grid_y, min_z, _max_z);
             total_volume += grid_volume_detail.volume;
+            max_volume += grid_volume_detail.max_volume;
             if (grid_volume_detail.cloud)
             {
                 *ret.clouds += *(grid_volume_detail.cloud);
@@ -588,9 +621,13 @@ static vehicle_detail_info vehicle_is_full(myPointCloud::Ptr _cloud, float _line
             }
         }
     }
-    auto cur_volume_rate = total_volume / max_volume;
+    float cur_volume_rate = 0;
+    if (max_volume > 0)
+    {
+        cur_volume_rate = total_volume / max_volume;
+    }
     auto end_us_timestamp = get_current_us_stamp();
-    tmp_logger.log("current volume rate:%f, spend:%dus", cur_volume_rate, end_us_timestamp - begin_us_timestamp);
+    rd_print_log("current volume rate:%f, spend:%dus", cur_volume_rate, end_us_timestamp - begin_us_timestamp);
     if (cur_volume_rate < full_rate)
     {
         ret.is_full = false;
@@ -642,8 +679,7 @@ static pc_after_split split_cloud_to_side_and_content(myPointCloud::Ptr _cloud)
     ret.illegal_side = clst_ret.last;
 
     auto end_us_stamp = get_current_us_stamp();
-    AD_LOGGER tmp_logger("RIDAR");
-    tmp_logger.log("split cloud takes %ld us", end_us_stamp - start_us_stamp);
+    rd_print_log("split cloud takes %ld us", end_us_stamp - start_us_stamp);
     return ret;
 }
 
@@ -676,8 +712,7 @@ static key_seg_params get_position_state_from_cloud(myPointCloud::Ptr _cloud)
     {
         auto ex = key_seg.first.x;
         auto bx = key_seg.second.x;
-        AD_LOGGER tmp_logger("RIDAR");
-        tmp_logger.log("ex:%f, bx:%f", ex, bx);
+        rd_print_log("ex:%f, bx:%f", ex, bx);
         if (ex <= E0 && bx >= B_0 && bx <= B1)
         {
             ret.state = vehicle_position_detect_state::vehicle_postion_begin;
@@ -862,7 +897,6 @@ void process_msg(std::shared_ptr<pcMsg> msg)
 {
     if (msg)
     {
-        AD_LOGGER tmp_logger("RIDAR");
         auto one_frame = make_cloud_by_msg(msg);
         save_full_cloud(one_frame);
         // 坐标转换
@@ -956,8 +990,7 @@ void RS_DRIVER::start(const std::string &_file, int _interval_sec)
                     sim_vehicle_cur_volume(cur_result.cur_volume);
                     sim_vehicle_height(cur_result.height);
                     ad_rpc_update_current_state();
-                    serial_pc();
-                });
+                    serial_pc(); });
         }
         else
         {
@@ -995,8 +1028,6 @@ AD_INI_CONFIG *get_ini_config()
 void save_detect_result(const vehicle_rd_detect_result &result)
 {
     std::lock_guard<std::recursive_mutex> lock(g_rd_result_mutex);
-    AD_LOGGER tmp_log("RIDAR");
-    tmp_log.log(AD_LOGGER::INFO, "save_detect_result: %d %d", result.state, result.is_full);
     g_rd_result = result;
 }
 
