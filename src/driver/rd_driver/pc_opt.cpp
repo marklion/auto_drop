@@ -31,6 +31,16 @@ typedef PointCloudT<pcl::PointXYZI> pcMsg;
 robosense::lidar::SyncQueue<std::shared_ptr<pcMsg>> free_cloud_queue;
 robosense::lidar::SyncQueue<std::shared_ptr<pcMsg>> stuffed_cloud_queue;
 
+static void rd_print_log_2stdout(const std::string &_format, ...)
+{
+    char buffer[1024];
+    va_list args;
+    va_start(args, _format);
+    vsnprintf(buffer, sizeof(buffer), _format.c_str(), args);
+    va_end(args);
+    puts(buffer) ;
+}
+
 static void rd_print_log(const std::string &_format, ...)
 {
     char buffer[1024];
@@ -66,7 +76,7 @@ static void process_msg(std::shared_ptr<pcMsg> msg);
 static void serial_pc();
 static myPointCloud::Ptr g_cur_cloud;
 static myPointCloud::Ptr g_output_cloud;
-static myPointCloud::Ptr g_full_cloud;
+static std::shared_ptr<pcMsg> g_full_cloud;
 static void put_cloud(myPointCloud::Ptr _cloud)
 {
     if (g_cur_cloud)
@@ -82,9 +92,9 @@ static myPointCloud::Ptr get_cur_cloud()
 
     return ret;
 }
-static myPointCloud::Ptr get_full_cloud()
+static std::shared_ptr<pcMsg> get_full_cloud()
 {
-    myPointCloud::Ptr ret(new myPointCloud);
+    auto ret = std::make_shared<pcMsg>();
     std::lock_guard<std::recursive_mutex> lock(g_rd_result_mutex);
     if (g_full_cloud)
     {
@@ -93,7 +103,7 @@ static myPointCloud::Ptr get_full_cloud()
 
     return ret;
 }
-static void save_full_cloud(myPointCloud::Ptr _cloud)
+static void save_full_cloud(std::shared_ptr<pcMsg> _cloud)
 {
     std::lock_guard<std::recursive_mutex> lock(g_rd_result_mutex);
     g_full_cloud = _cloud;
@@ -155,7 +165,7 @@ void driverReturnPointCloudToCallerCallback(std::shared_ptr<pcMsg> msg)
     }
     stuffed_cloud_queue.push(msg);
 }
-static void save_ply(myPointCloud::Ptr cloud, const std::string &_filename = "")
+std::string make_file_name(const std::string &_filename)
 {
     static int file_no = 0;
     auto file_name = _filename;
@@ -168,6 +178,16 @@ static void save_ply(myPointCloud::Ptr cloud, const std::string &_filename = "")
     {
         boost::filesystem::create_directories(dir);
     }
+    return file_name;
+}
+static void save_ply(std::shared_ptr<pcMsg> cloud, const std::string &_filename = "")
+{
+    auto file_name = make_file_name(_filename);
+    pcl::io::savePLYFileASCII(file_name, *cloud);
+}
+static void save_ply(myPointCloud::Ptr cloud, const std::string &_filename = "")
+{
+    auto file_name = make_file_name(_filename);
     pcl::io::savePLYFileASCII(file_name, *cloud);
 }
 static std::shared_ptr<pcMsg> create_new_msg()
@@ -364,7 +384,7 @@ static std::unique_ptr<myPoint> find_max_or_min_z_point(myPointCloud::Ptr _cloud
     return ret;
 }
 
-static std::pair<myPoint, myPoint> get_key_seg(myPointCloud::Ptr _cloud, float line_distance_threshold, float plane_distance_threshold, float _full_y_offset, float _full_z_offset)
+static std::pair<myPoint, myPoint> get_key_seg(myPointCloud::Ptr _cloud, float line_distance_threshold, float _full_y_offset, float _full_z_offset)
 {
     auto max_z_point = find_max_or_min_z_point(_cloud, line_distance_threshold, false);
 
@@ -378,7 +398,7 @@ static std::pair<myPoint, myPoint> get_key_seg(myPointCloud::Ptr _cloud, float l
     {
         auto tmp_point = itr;
         tmp_point.y = max_z_point->y;
-        if (pointToLineDistance(tmp_point.getVector3fMap(), max_z_point->getVector3fMap(), key_line_dir) < plane_distance_threshold)
+        if (pointToLineDistance(tmp_point.getVector3fMap(), max_z_point->getVector3fMap(), key_line_dir) < line_distance_threshold)
         {
             line_points.push_back(itr);
         }
@@ -595,6 +615,14 @@ static vehicle_detail_info vehicle_is_full(myPointCloud::Ptr _cloud, float _line
     ret.is_full = true;
 
     auto min_z_point = find_max_or_min_z_point(_cloud, _line_DistanceThreshold, true);
+    myPoint left_point, right_point;
+    left_point.x = _x_min;
+    left_point.y = min_z_point->y;
+    left_point.z = min_z_point->z;
+    right_point.x = _x_max;
+    right_point.y = min_z_point->y;
+    right_point.z = min_z_point->z;
+    insert_several_points(_cloud, left_point, right_point);
     auto min_z = min_z_point->z;
     auto max_height = _max_z - min_z;
     auto cur_length = _x_max - _x_min;
@@ -697,7 +725,6 @@ static key_seg_params get_position_state_from_cloud(myPointCloud::Ptr _cloud)
     key_seg_params ret;
     const std::string config_sec = "get_state";
 
-    auto plane_DistanceThreshold = atof(get_ini_config()->get_config(config_sec, "plane_DistanceThreshold", "0.1").c_str());
     auto line_DistanceThreshold = atof(get_ini_config()->get_config(config_sec, "line_DistanceThreshold", "0.1").c_str());
     auto E0 = atof(get_ini_config()->get_config(config_sec, "E0", "0.1").c_str());
     auto E1 = atof(get_ini_config()->get_config(config_sec, "E1", "0.1").c_str());
@@ -705,7 +732,7 @@ static key_seg_params get_position_state_from_cloud(myPointCloud::Ptr _cloud)
     auto B1 = atof(get_ini_config()->get_config(config_sec, "B1", "0.1").c_str());
     auto full_z_offset = atof(get_ini_config()->get_config(config_sec, "full_z_offset", "0.1").c_str());
 
-    auto key_seg = get_key_seg(_cloud, line_DistanceThreshold, plane_DistanceThreshold, 0, full_z_offset);
+    auto key_seg = get_key_seg(_cloud, line_DistanceThreshold, 0, full_z_offset);
     insert_several_points(_cloud, key_seg.first, key_seg.second);
 
     if (key_seg.first.x != key_seg.second.x)
@@ -897,8 +924,8 @@ void process_msg(std::shared_ptr<pcMsg> msg)
 {
     if (msg)
     {
+        save_full_cloud(msg);
         auto one_frame = make_cloud_by_msg(msg);
-        save_full_cloud(one_frame);
         // 坐标转换
         auto frame_after_trans = pc_transform(one_frame);
         // 有效范围过滤
@@ -1018,6 +1045,24 @@ bool should_stop_walk()
     auto cur_count = g_total_frame;
     usleep(1000000);
     return cur_count == g_total_frame;
+}
+
+void process_one_plyfile(const std::string &file_name)
+{
+    std::shared_ptr<pcMsg> cloud = std::make_shared<pcMsg>();
+    if (pcl::io::loadPLYFile(file_name, *cloud) == -1)
+    {
+        rd_print_log_2stdout("Couldn't read file %s \n", file_name.c_str());
+        return;
+    }
+    update_cur_cloud();
+    process_msg(cloud);
+    auto date_string = ad_utils_date_time().m_datetime;
+    std::string ply_file_name = "after_one_process_" + date_string + ".ply";
+    std::string out_file_name = "/database/" + ply_file_name;
+    save_ply(get_cur_cloud(), out_file_name);
+    auto ret = get_detect_result();
+    rd_print_log_2stdout("out_file:%s, state:%d, is_full:%d, max_volume:%f, cur_volume:%f, height:%f", out_file_name.c_str(), ret.state, ret.is_full, ret.max_volume, ret.cur_volume, ret.height);
 }
 
 AD_INI_CONFIG *get_ini_config()

@@ -5,6 +5,7 @@
 
 bool should_stop_walk();
 
+void process_one_plyfile(const std::string &file_name);
 class RS_DRIVER : public common_driver
 {
     void *common_rs_driver_ptr = nullptr;

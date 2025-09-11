@@ -7,8 +7,15 @@ int main(int argc, char const *argv[])
     {
         std::string config_file_path = argv[2];
         auto driver = std::make_shared<RS_DRIVER>(config_file_path);
-        driver->start();
-        driver->start_driver_daemon(argc, argv);
+        if (atoi(argv[1]) <= 0)
+        {
+            process_one_plyfile(argv[1]);
+        }
+        else
+        {
+            driver->start();
+            driver->start_driver_daemon(argc, argv);
+        }
     }
     else if (argc == 2)
     {
