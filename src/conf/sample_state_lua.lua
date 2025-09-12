@@ -76,3 +76,61 @@ end)
 打开定时器，每1秒获取一次车辆雷达检测结果和车辆是否通过，
 如果车辆通过闸机并且车辆装满，则停止播放语音，停止显示内容，停止定时器，触发事件some_event
 --]]
+--init enter
+function handler_init_timer()
+    sm:stop_timer(init_timer);
+    init_timer = nil;
+    local rd_ret = sm:dev_vehicle_rd_detect("ridar")
+    if (rd_ret.state < 3) then
+        sm:trigger_event("ready_occ");
+    end
+    init_timer = sm:start_timer(1, handler_init_timer)
+end
+sm:dev_save_ply("ridar", "ready");
+init_timer = sm:start_timer(1, handler_init_timer)
+--init exit
+sm:dev_save_ply("ridar", "exception");
+if (init_timer) then
+    sm:stop_timer(init_timer);
+end
+--work enter
+function handler_work_timer()
+    sm:stop_timer(work_timer);
+    work_timer = nil;
+    local rd_ret = sm:dev_vehicle_rd_detect("ridar")
+    if (rd_ret.state == 3) then
+        sm:trigger_event("exception_occ");
+    end
+    local currentTime = os.date("%Y-%m-%d %H:%M:%S")
+    local newRecord = string.format("%s,%.1f", currentTime, rd_ret.full_rate)
+    local filePath = "/database/rate_record.csv"
+    local file, err = io.open(filePath, "a")
+    if file then
+        file:write(newRecord .. "\n")
+        file:close()
+    end
+
+    work_timer = sm:start_timer(1, handler_work_timer)
+end
+work_timer = sm:start_timer(1, handler_work_timer)
+--work exit
+if (work_timer) then
+    sm:stop_timer(work_timer);
+end
+--change enter
+function handler_change_timer()
+    sm:stop_timer(change_timer);
+    change_timer = nil;
+    local rd_ret = sm:dev_vehicle_rd_detect("ridar")
+    if (rd_ret.state < 3) then
+        sm:trigger_event("ready_confirm");
+    else
+        sm:trigger_event("exception_confirm");
+    end
+    change_timer = sm:start_timer(1, handler_change_timer)
+end
+change_timer = sm:start_timer(1, handler_change_timer)
+--change exit
+if (change_timer) then
+    sm:stop_timer(change_timer);
+end

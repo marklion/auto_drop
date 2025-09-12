@@ -31,7 +31,6 @@ int main(int argc, char const *argv[])
     sc->enable_rpc_server(std::stoul(argv[1]));
     auto runner = RUNNER::runner_init(YAML::LoadFile(argv[2])["sm"]);
     auto runner_sm = std::make_shared<runner_sm_impl>(runner);
-    sc->registerNode(runner->m_event_sc);
     sc->add_rpc_server("runner_sm", std::make_shared<runner_smProcessor>(runner_sm));
     sc->add_co(
         [&]()

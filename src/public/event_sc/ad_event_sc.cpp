@@ -136,7 +136,7 @@ public:
 };
 bool AD_EVENT_SC::yield_by_fd(int _fd, int _micro_sec)
 {
-    auto co_node = std::make_shared<AD_CO_EVENT_NODE>(std::static_pointer_cast<AD_EVENT_SC>(shared_from_this()), _fd, _micro_sec);
+    auto co_node = std::make_shared<AD_CO_EVENT_NODE>(shared_from_this(), _fd, _micro_sec);
     registerNode(co_node);
     yield_co();
     return m_current_co->get_yield_result();
@@ -179,7 +179,68 @@ void AD_EVENT_SC::runEventLoop()
 {
     while (m_fdToNode.size() > 0)
     {
-        handleEvent();
+        bool still_has_ready_co = true;
+        while (still_has_ready_co)
+        {
+            std::vector<AD_CO_ROUTINE_PTR> ready_co;
+            for (auto &itr : m_co_routines)
+            {
+                if (itr->get_co_state() == AD_CO_ROUTINE::ACR_STATE_READY)
+                {
+                    ready_co.push_back(itr);
+                }
+            }
+            if (ready_co.size() == 0)
+            {
+                still_has_ready_co = false;
+            }
+            else
+            {
+                still_has_ready_co = true;
+            }
+            for (auto &co : ready_co)
+            {
+                resume_co(co);
+            }
+            for (auto itr = m_co_routines.begin(); itr != m_co_routines.end();)
+            {
+                if ((*itr)->get_co_state() == AD_CO_ROUTINE::ACR_STATE_DEAD)
+                {
+                    itr = m_co_routines.erase(itr);
+                }
+                else
+                {
+                    itr++;
+                }
+            }
+        }
+
+        const int MAX_EVENTS = 1;
+        struct epoll_event events[MAX_EVENTS] = {0};
+        if (m_fdToNode.size() == 0)
+        {
+            return;
+        }
+        int n = epoll_wait(m_epollFd, events, MAX_EVENTS, -1); // 阻塞等待事件
+        if (n != -1)
+        {
+            for (int i = 0; i < n; ++i)
+            {
+                int fd = events[i].data.fd;
+                if (m_fdToNode.find(fd) != m_fdToNode.end())
+                {
+                    auto p_event_node = m_fdToNode[fd];
+                    add_co(
+                        [p_event_node]()
+                        { p_event_node->handleEvent(); },
+                        p_event_node->node_name());
+                }
+            }
+        }
+        else
+        {
+            m_logger.log(AD_LOGGER::ERROR, "epoll_wait error:%s", strerror(errno));
+        }
     }
 }
 
@@ -193,78 +254,6 @@ void AD_EVENT_SC::stopEventLoop()
         }
     }
     m_fdToNode.clear();
-}
-
-int AD_EVENT_SC::getFd() const
-{
-    return m_epollFd;
-}
-
-void AD_EVENT_SC::handleEvent()
-{
-    bool still_has_ready_co = true;
-    while (still_has_ready_co)
-    {
-        std::vector<AD_CO_ROUTINE_PTR> ready_co;
-        for (auto &itr : m_co_routines)
-        {
-            if (itr->get_co_state() == AD_CO_ROUTINE::ACR_STATE_READY)
-            {
-                ready_co.push_back(itr);
-            }
-        }
-        if (ready_co.size() == 0)
-        {
-            still_has_ready_co = false;
-        }
-        else
-        {
-            still_has_ready_co = true;
-        }
-        for (auto &co : ready_co)
-        {
-            resume_co(co);
-        }
-        for (auto itr = m_co_routines.begin(); itr != m_co_routines.end();)
-        {
-            if ((*itr)->get_co_state() == AD_CO_ROUTINE::ACR_STATE_DEAD)
-            {
-                itr = m_co_routines.erase(itr);
-            }
-            else
-            {
-                itr++;
-            }
-        }
-    }
-
-    const int MAX_EVENTS = 1;
-    struct epoll_event events[MAX_EVENTS] = {0};
-    if (m_fdToNode.size() == 0)
-    {
-        return;
-    }
-    int n = epoll_wait(m_epollFd, events, MAX_EVENTS, -1); // 阻塞等待事件
-    if (n != -1)
-    {
-        for (int i = 0; i < n; ++i)
-        {
-            int fd = events[i].data.fd;
-            if (m_fdToNode.find(fd) != m_fdToNode.end())
-            {
-                auto p_event_node = m_fdToNode[fd];
-                add_co(
-                    [p_event_node]()
-                    { p_event_node->handleEvent(); },
-                    p_event_node->node_name()
-                );
-            }
-        }
-    }
-    else
-    {
-        m_logger.log(AD_LOGGER::ERROR, "epoll_wait error:%s", strerror(errno));
-    }
 }
 
 void AD_EVENT_SC::non_block_system(const std::string &_cmd)
@@ -446,7 +435,7 @@ static void co_routine_func(AD_CO_ROUTINE *_co)
     _co->set_co_state(AD_CO_ROUTINE::ACR_STATE_DEAD);
 }
 static long g_co_id = 0;
-AD_CO_ROUTINE::AD_CO_ROUTINE(AD_CO_ROUTINE_FUNC _func, ucontext_t *_main_co, const std::string &_name) : m_func(_func),m_co_name(_name)
+AD_CO_ROUTINE::AD_CO_ROUTINE(AD_CO_ROUTINE_FUNC _func, ucontext_t *_main_co, const std::string &_name) : m_func(_func), m_co_name(_name)
 {
     getcontext(&m_context);
     m_context.uc_stack.ss_sp = m_stacks;

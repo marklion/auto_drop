@@ -26,7 +26,8 @@ class runner_rd_detect_result
 public:
     vehicle_position_detect_state::type state;
     bool is_full;
-    runner_rd_detect_result(vehicle_position_detect_state::type _state, bool _is_full) : state(_state), is_full(_is_full) {}
+    float full_rate = 0;
+    runner_rd_detect_result(vehicle_position_detect_state::type _state, bool _is_full, float _full_rate) : state(_state), is_full(_is_full),full_rate(_full_rate)  {}
     int get_state() const
     {
         return state;
@@ -34,6 +35,10 @@ public:
     bool get_is_full() const
     {
         return is_full;
+    }
+    float get_full_rate() const
+    {
+        return full_rate;
     }
 };
 
@@ -68,17 +73,8 @@ public:
 class RUNNER : public DYNAMIC_SM, public RV_FATHER
 {
     using DYNAMIC_SM::DYNAMIC_SM;
-    std::function<void(AD_EVENT_SC_TIMER_NODE_PTR &)> m_clear_timer_func = [this](AD_EVENT_SC_TIMER_NODE_PTR &timer)
-    {
-        if (timer)
-        {
-            m_event_sc->stopTimer(timer);
-            timer.reset();
-        }
-    };
     std::map<std::string, uint16_t> m_device_map;
     AD_CO_MUTEX m_mutex = AD_CO_MUTEX(AD_RPC_SC::get_instance());
-
 public:
     virtual void lock_sm() override
     {
@@ -107,7 +103,6 @@ public:
 
         return ret;
     }
-    std::shared_ptr<AD_EVENT_SC> m_event_sc = std::make_shared<AD_EVENT_SC>();
     AD_LOGGER m_logger = AD_LOGGER("runner");
     void dev_voice_broadcast(const std::string &_dev_name, const std::string &_content, int times)
     {
@@ -184,7 +179,11 @@ public:
             {
                 client.vehicle_rd_detect(ret);
             });
-        return runner_rd_detect_result(ret.state, ret.is_full);
+        auto rate = 0;
+        if (ret.max_volume != 0) {
+            rate = ret.cur_volume / ret.max_volume;
+        }
+        return runner_rd_detect_result(ret.state, ret.is_full, rate);
     }
     bool dev_vehicle_passed_gate(const std::string &_dev_name)
     {
@@ -197,23 +196,28 @@ public:
             });
         return ret;
     }
-
-    AD_EVENT_SC_TIMER_NODE_PTR start_timer(int _sec, luabridge::LuaRef _func)
+    AD_EVENT_SC_TIMER_NODE_PTR start_timer_ms(int _ms_sec, luabridge::LuaRef _func)
     {
         AD_EVENT_SC_TIMER_NODE_PTR ret;
+        auto sec = _ms_sec / 1000;
+        auto ms = _ms_sec % 1000;
         if (_func.isFunction())
         {
-            ret = m_event_sc->startTimer(
-                _sec, [_func]()
+            ret = AD_RPC_SC::get_instance()->startTimer(
+                sec, ms, [_func]()
                 { _func(); });
         }
         return ret;
+    }
+    AD_EVENT_SC_TIMER_NODE_PTR start_timer(int _sec, luabridge::LuaRef _func)
+    {
+        return start_timer_ms(_sec * 1000, _func);
     }
     void stop_timer(AD_EVENT_SC_TIMER_NODE_PTR _timer)
     {
         if (_timer)
         {
-            m_event_sc->stopTimer(_timer);
+            AD_RPC_SC::get_instance()->stopTimer(_timer);
         }
     }
     void trigger_sm_by_event(const std::string &_event)

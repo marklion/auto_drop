@@ -103,7 +103,7 @@ typedef std::shared_ptr<AD_CO_ROUTINE> AD_CO_ROUTINE_PTR;
 
 
 
-class AD_EVENT_SC : public AD_EVENT_SC_NODE
+class AD_EVENT_SC:public std::enable_shared_from_this<AD_EVENT_SC>
 {
 public:
     AD_EVENT_SC();
@@ -127,8 +127,6 @@ public:
     void runEventLoop();
 
     void stopEventLoop();
-    virtual int getFd() const override;
-    virtual void handleEvent() override;
     AD_CO_ROUTINE_PTR get_current_co()
     {
         return m_current_co;
