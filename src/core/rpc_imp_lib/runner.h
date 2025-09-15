@@ -179,7 +179,7 @@ public:
             {
                 client.vehicle_rd_detect(ret);
             });
-        auto rate = 0;
+        float rate = 0;
         if (ret.max_volume != 0) {
             rate = ret.cur_volume / ret.max_volume;
         }
