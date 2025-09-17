@@ -387,6 +387,26 @@ static void save_ply(std::ostream &out, std::vector<std::string> _params)
         out << check_ret << std::endl;
     }
 }
+static void set_lc_open(std::ostream &out, std::vector<std::string> _params)
+{
+    auto check_ret = common_cli::check_params(_params, 0, "设备名");
+    check_ret += common_cli::check_params(_params, 1, "开关阈值");
+    if (check_ret.empty())
+    {
+        int32_t threshold = std::stoi(_params[1]);
+        if (threshold < 0 || threshold > 100)
+        {
+            out << "阈值不能小于0或大于100" << std::endl;
+            return;
+        }
+        ad_rpc_set_lc_open(_params[0], threshold);
+        out << "设置阈值成功" << std::endl;
+    }
+    else
+    {
+        out << check_ret << std::endl;
+    }
+}
 
 static std::unique_ptr<cli::Menu> make_runtime_menu()
 {
@@ -399,6 +419,7 @@ static std::unique_ptr<cli::Menu> make_runtime_menu()
     sm_menu->Insert(CLI_MENU_ITEM(open_log), "打开日志");
     sm_menu->Insert(CLI_MENU_ITEM(close_log), "关闭日志");
     sm_menu->Insert(CLI_MENU_ITEM(save_ply), "保存点云", {"设备名"});
+    sm_menu->Insert(CLI_MENU_ITEM(set_lc_open), "设置溜槽开度", {"设备名", "开度"});
     sm_menu->Insert(CLI_MENU_ITEM(send_sm_event), "手动事件触发状态机");
     sm_menu->Insert(CLI_MENU_ITEM(show_sm_state), "显示状态机当前状态");
     return sm_menu;

@@ -1,0 +1,14 @@
+cmake_minimum_required(VERSION 3.10)
+project(tastek)
+
+SET(LIBRARY_OUTPUT_PATH ${PRJ_INTERNAL_BUILD}/lib)
+SET(EXECUTABLE_OUTPUT_PATH ${PRJ_INTERNAL_BUILD}/bin)
+add_compile_options(-std=gnu++14 -g)
+aux_source_directory(./ MAIN_SRC)
+add_executable(tastek_driver ${MAIN_SRC})
+
+find_library(AD_DRIVER_LIB libad_driver.so ${PRJ_INTERNAL_BUILD}/lib)
+find_library(AD_UTILS_LIB libad_utils.so ${PRJ_INTERNAL_BUILD}/lib)
+find_library(AD_RPC_LIB libad_rpc.so ${PRJ_INTERNAL_BUILD}/lib)
+
+target_link_libraries(tastek_driver ${AD_DRIVER_LIB} ${AD_UTILS_LIB} ${AD_RPC_LIB} thrift modbus)

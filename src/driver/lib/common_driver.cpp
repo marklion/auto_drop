@@ -1,6 +1,13 @@
 #include "common_driver.h"
-#include "../../rpc/ad_rpc.h"
 #include "../../rpc/gen_code/cpp/runner_sm.h"
+
+common_driver::~common_driver()
+{
+    if (m_relay_timer)
+    {
+        AD_RPC_SC::get_instance()->stopTimer(m_relay_timer);
+    }
+}
 
 bool common_driver::set_sm(const u16 sm_port)
 {
@@ -106,8 +113,7 @@ bool common_driver::vehicle_passed_gate()
 
 void common_driver::set_lc_open(const int32_t thredhold)
 {
-    m_lc_open_threshold = thredhold;
-    ad_rpc_update_current_state();
+    execute_to_threshold(thredhold);
 }
 
 int32_t common_driver::get_lc_open()
@@ -118,4 +124,87 @@ int32_t common_driver::get_lc_open()
 double common_driver::get_scale_weight()
 {
     return m_current_weight;
+}
+
+void common_driver::open_close_lc_cmd(bool _is_open, bool _is_on)
+{
+    m_logger.log("收到开关LC命令: %s, %s", _is_open ? "开" : "关", _is_on ? "执行" : "停止");
+}
+
+void common_driver::start_relay_timer()
+{
+    if (!m_relay_timer)
+    {
+        m_relay_timer = AD_RPC_SC::get_instance()->startTimer(
+            1,
+            [this]() {
+                if (m_relay_state == HOLD_OPEN)
+                {
+                    m_state_stay_position++;
+                }
+                else if (m_relay_state == HOLD_CLOSE)
+                {
+                    m_state_stay_position--;
+                }
+                if (m_state_stay_position == m_expect_position)
+                {
+                    relay_do_action(STOP);
+                }
+                m_lc_open_threshold = m_state_stay_position * get_position_coe();
+                m_logger.log("当前阈值：%d", get_lc_open());
+                ad_rpc_update_current_state();
+            });
+    }
+}
+
+
+void common_driver::relay_do_action(lc_relay_state_t _req_state)
+{
+    auto orig_state = m_relay_state;
+    if (orig_state != _req_state)
+    {
+        if (_req_state != STOP)
+        {
+            relay_do_action(STOP);
+        }
+        switch (_req_state)
+        {
+        case STOP:
+            open_close_lc_cmd(false, false);
+            open_close_lc_cmd(true, false);
+            break;
+        case HOLD_OPEN:
+            open_close_lc_cmd(false, false);
+            open_close_lc_cmd(true, true);
+            break;
+        case HOLD_CLOSE:
+            open_close_lc_cmd(true, false);
+            open_close_lc_cmd(false, true);
+            break;
+        default:
+            break;
+        }
+        m_relay_state = _req_state;
+    }
+}
+
+void common_driver::execute_to_threshold(int32_t threshold)
+{
+    m_logger.log("指定执行到阈值: %d", threshold );
+    auto threshold_coe = get_position_coe();
+    m_expect_position = threshold / threshold_coe;
+    auto position_diff = m_expect_position - m_state_stay_position;
+    if (position_diff > 0)
+    {
+        relay_do_action(HOLD_OPEN);
+    }
+    else if (position_diff < 0)
+    {
+        relay_do_action(HOLD_CLOSE);
+    }
+}
+
+int common_driver::get_position_coe() const
+{
+    return 20;
 }

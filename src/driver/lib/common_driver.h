@@ -4,6 +4,7 @@
 #include "../../rpc/gen_code/cpp/driver_service.h"
 #include "../../public/utils/ad_utils.h"
 #include "../../public/const_var_define.h"
+#include "../../rpc/ad_rpc.h"
 
 class common_driver : public driver_serviceIf, public std::enable_shared_from_this<common_driver>
 {
@@ -12,7 +13,16 @@ class common_driver : public driver_serviceIf, public std::enable_shared_from_th
     bool m_gate_is_close = false;
     double m_current_weight = 0;
     int32_t m_lc_open_threshold = 0;
-
+    int threshold_coe = 20;
+    enum lc_relay_state_t
+    {
+        STOP,
+        HOLD_OPEN,
+        HOLD_CLOSE,
+    } m_relay_state = STOP;
+    int m_state_stay_position = 0;
+    AD_EVENT_SC_TIMER_NODE_PTR m_relay_timer;
+    int m_expect_position = 0;
 protected:
     AD_LOGGER m_logger;
     u16 m_sm_port = 0;
@@ -21,6 +31,7 @@ public:
     common_driver(const std::string &_driver_name) : m_logger(_driver_name)
     {
     }
+    virtual ~common_driver();
     virtual bool set_sm(const u16 sm_port) override final;
     virtual void stop_device() override final;
     int start_driver_daemon(int argc, char const *argv[]);
@@ -45,6 +56,11 @@ public:
     virtual void set_lc_open(const int32_t thredhold);
     virtual int32_t get_lc_open() override final;
     virtual double get_scale_weight() override final;
+    virtual void open_close_lc_cmd(bool _is_open, bool _is_on);
+    void start_relay_timer();
+    void relay_do_action(lc_relay_state_t _req_state);
+    void execute_to_threshold(int32_t threshold);
+    virtual int get_position_coe() const;
 };
 
 #endif // _COMMON_DRIVER_H_

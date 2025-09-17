@@ -199,5 +199,6 @@ std::string ad_rpc_device_save_ply(const std::string &dev_name);
 void ad_rpc_gate_ctrl(const std::string &dev_name, bool _is_open);
 std::string ad_rpc_get_current_state();
 void ad_rpc_update_current_state();
+void ad_rpc_set_lc_open(const std::string &dev_name, int32_t threshold);
 
 #endif // _AD_RPC_H_

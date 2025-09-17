@@ -14,7 +14,10 @@ static ssize_t my_redis_read(struct redisContext *rc, char *buf, size_t buf_size
 redisContext *AD_REDIS_HELPER::prepare_redis()
 {
     redisContext *ret = nullptr;
-    auto rc = redisConnect(m_host.c_str(), m_port);
+    timeval tv;
+    tv.tv_sec = 0;
+    tv.tv_usec = 700000; // 500 ms
+    auto rc = redisConnectWithTimeout(m_host.c_str(), m_port, tv);
     if (rc)
     {
         if (!rc->err)

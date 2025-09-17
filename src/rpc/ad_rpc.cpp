@@ -196,6 +196,20 @@ void ad_rpc_update_current_state()
     }
 }
 
+void ad_rpc_set_lc_open(const std::string &dev_name, int32_t threshold)
+{
+    u16 port = ad_rpc_get_specific_dev_port(dev_name);
+    if (port > 0)
+    {
+        rpc_wrapper_call_device(
+            port,
+            [&](driver_serviceClient &client)
+            {
+                client.set_lc_open(threshold);
+            });
+    }
+}
+
 void AD_RPC_SC::start_co_record()
 {
     startTimer(

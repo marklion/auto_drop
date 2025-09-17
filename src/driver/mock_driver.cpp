@@ -77,16 +77,11 @@ public:
     {
         return true;
     }
-
-    virtual void set_lc_open(const int32_t thredhold)
-    {
-        AD_RPC_SC::get_instance()->yield_by_timer(2);
-        common_driver::set_lc_open(thredhold);
-    }
 };
 
 int main(int argc, char const *argv[])
 {
     auto md = std::make_shared<mock_driver>();
+    md->start_relay_timer();
     return md->start_driver_daemon(argc, argv);
 }
