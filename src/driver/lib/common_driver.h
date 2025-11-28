@@ -48,9 +48,7 @@ public:
     virtual void sim_gate_status(const bool is_close) override final;
     virtual void sim_scale_weight(const double weight) override final;
     virtual void sim_vehicle_position(const vehicle_position_detect_state::type state) override final;
-    virtual void sim_vehicle_max_volume(const double volume) override final;
-    virtual void sim_vehicle_cur_volume(const double volume) override final;
-    virtual void sim_vehicle_height(const double height) override final;
+    virtual void sim_full_offset(const double full_offset) override final;
     virtual void sim_vehicle_stuff(const bool is_full) override final;
     virtual bool vehicle_passed_gate() override final;
     virtual void set_lc_open(const int32_t thredhold);

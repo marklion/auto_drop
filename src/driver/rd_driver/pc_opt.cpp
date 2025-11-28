@@ -38,7 +38,7 @@ static void rd_print_log_2stdout(const std::string &_format, ...)
     va_start(args, _format);
     vsnprintf(buffer, sizeof(buffer), _format.c_str(), args);
     va_end(args);
-    puts(buffer) ;
+    puts(buffer);
 }
 
 static void rd_print_log(const std::string &_format, ...)
@@ -61,7 +61,8 @@ struct pc_after_pickup
     {
     }
 };
-struct pc_after_split {
+struct pc_after_split
+{
     myPointCloud::Ptr legal_side;
     myPointCloud::Ptr illegal_side;
     myPointCloud::Ptr content;
@@ -531,13 +532,12 @@ void serial_pc()
 
 struct grid_volume_detial
 {
-    float volume = 0;
-    float max_volume = 0;
+    float full_offset = 0;
     myPointCloud::Ptr cloud;
     myPointCloud::Ptr last_cloud;
 };
 
-static grid_volume_detial calc_grid_volume(myPointCloud::Ptr _cloud, float _x_min, float _x_max, float _y_min, float _y_max, float _bottom_z, float _top_z)
+static grid_volume_detial calc_grid_volume(myPointCloud::Ptr _cloud, float _x_min, float _x_max, float _y_min, float _y_max, float _top_z)
 {
     grid_volume_detial ret;
 
@@ -565,7 +565,7 @@ static grid_volume_detial calc_grid_volume(myPointCloud::Ptr _cloud, float _x_mi
     }
 
     ret.last_cloud = y_last;
-    float height = 0;
+    float top_z = 0;
     if (is_vertical)
     {
         *ret.last_cloud += *cloud_filtered_y;
@@ -577,15 +577,19 @@ static grid_volume_detial calc_grid_volume(myPointCloud::Ptr _cloud, float _x_mi
         {
             for (auto &itr : cloud_filtered_y->points)
             {
-                height += (itr.z - _bottom_z);
+                top_z += itr.z;
             }
-            height = height / cloud_filtered_y->points.size();
+            top_z = top_z / cloud_filtered_y->points.size();
         }
     }
-    auto bottom_area = (_x_max - _x_min) * (_y_max - _y_min);
-
-    ret.max_volume = (_top_z - _bottom_z) * bottom_area;
-    ret.volume = height * bottom_area;
+    if (top_z != 0)
+    {
+    ret.full_offset = top_z - _top_z;
+    }
+    else
+    {
+        ret.full_offset = -0.5;
+    }
 
     return ret;
 }
@@ -593,9 +597,7 @@ static grid_volume_detial calc_grid_volume(myPointCloud::Ptr _cloud, float _x_mi
 struct vehicle_detail_info
 {
     bool is_full = false;
-    float height = 0;
-    float max_volume = 0;
-    float cur_volume = 0;
+    float full_offset = 0;
     myPointCloud::Ptr clouds;
     myPointCloud::Ptr last_clouds;
     vehicle_detail_info() : clouds(new myPointCloud), last_clouds(new myPointCloud)
@@ -627,18 +629,15 @@ static vehicle_detail_info vehicle_is_full(myPointCloud::Ptr _cloud, float _line
     auto max_height = _max_z - min_z;
     auto cur_length = _x_max - _x_min;
 
+    std::vector<float> full_offset_array;
     auto grid_x = cur_length / x_grid_number;
     auto grid_y = spec_width / y_grid_number;
-    float total_volume = 0;
-    float max_volume = 0;
     ret.last_clouds = _full_cloud;
     for (auto i = 0; i < x_grid_number; i++)
     {
         for (auto j = 0; j < y_grid_number; j++)
         {
-            auto grid_volume_detail = calc_grid_volume(ret.last_clouds, _x_min + i * grid_x, _x_min + (i + 1) * grid_x, _y + j * grid_y, _y + (j + 1) * grid_y, min_z, _max_z);
-            total_volume += grid_volume_detail.volume;
-            max_volume += grid_volume_detail.max_volume;
+            auto grid_volume_detail = calc_grid_volume(ret.last_clouds, _x_min + i * grid_x, _x_min + (i + 1) * grid_x, _y + j * grid_y, _y + (j + 1) * grid_y, _max_z);
             if (grid_volume_detail.cloud)
             {
                 *ret.clouds += *(grid_volume_detail.cloud);
@@ -647,22 +646,22 @@ static vehicle_detail_info vehicle_is_full(myPointCloud::Ptr _cloud, float _line
             {
                 ret.last_clouds = grid_volume_detail.last_cloud;
             }
+            full_offset_array.push_back(grid_volume_detail.full_offset);
         }
     }
-    float cur_volume_rate = 0;
-    if (max_volume > 0)
+    float full_offset = 0;
+    for (const auto &itr : full_offset_array)
     {
-        cur_volume_rate = total_volume / max_volume;
+        full_offset += itr;
     }
+    full_offset = full_offset / full_offset_array.size();
+    ret.full_offset = full_offset;
     auto end_us_timestamp = get_current_us_stamp();
-    rd_print_log("current volume rate:%f, spend:%dus", cur_volume_rate, end_us_timestamp - begin_us_timestamp);
-    if (cur_volume_rate < full_rate)
+    rd_print_log("current volume rate:%f, spend:%dus", full_offset, end_us_timestamp - begin_us_timestamp);
+    if (full_offset < full_rate)
     {
         ret.is_full = false;
     }
-    ret.cur_volume = total_volume;
-    ret.max_volume = max_volume;
-    ret.height = max_height;
 
     return ret;
 }
@@ -786,9 +785,7 @@ static vehicle_rd_detect_result pc_get_state(myPointCloud::Ptr _cloud)
     {
         auto vehicle_detail = vehicle_is_full(pc_after_split_ret.legal_side, line_DistanceThreshold, key_seg_ret.z, key_seg_ret.x_min, key_seg_ret.x_max, key_seg_ret.y, pc_after_split_ret.content);
         ret.is_full = vehicle_detail.is_full;
-        ret.cur_volume = vehicle_detail.cur_volume;
-        ret.height = vehicle_detail.height;
-        ret.max_volume = vehicle_detail.max_volume;
+        ret.full_offset = vehicle_detail.full_offset;
         color_cloud(0, 255, 0, pc_after_split_ret.legal_side);
 
         color_cloud(255, 0, 0, vehicle_detail.clouds);
@@ -1013,9 +1010,7 @@ void RS_DRIVER::start(const std::string &_file, int _interval_sec)
                     auto cur_result = get_detect_result();
                     sim_vehicle_position(cur_result.state);
                     sim_vehicle_stuff(cur_result.is_full);
-                    sim_vehicle_max_volume(cur_result.max_volume);
-                    sim_vehicle_cur_volume(cur_result.cur_volume);
-                    sim_vehicle_height(cur_result.height);
+                    sim_full_offset(cur_result.full_offset);
                     ad_rpc_update_current_state();
                     serial_pc(); });
         }
@@ -1062,7 +1057,7 @@ void process_one_plyfile(const std::string &file_name)
     std::string out_file_name = "/database/" + ply_file_name;
     save_ply(get_cur_cloud(), out_file_name);
     auto ret = get_detect_result();
-    rd_print_log_2stdout("out_file:%s, state:%d, is_full:%d, max_volume:%f, cur_volume:%f, height:%f", out_file_name.c_str(), ret.state, ret.is_full, ret.max_volume, ret.cur_volume, ret.height);
+    rd_print_log_2stdout("out_file:%s, state:%d, is_full:%d", out_file_name.c_str(), ret.state, ret.is_full);
 }
 
 AD_INI_CONFIG *get_ini_config()

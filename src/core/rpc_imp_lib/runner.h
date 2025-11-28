@@ -26,8 +26,8 @@ class runner_rd_detect_result
 public:
     vehicle_position_detect_state::type state;
     bool is_full;
-    float full_rate = 0;
-    runner_rd_detect_result(vehicle_position_detect_state::type _state, bool _is_full, float _full_rate) : state(_state), is_full(_is_full),full_rate(_full_rate)  {}
+    float full_offset;
+    runner_rd_detect_result(vehicle_position_detect_state::type _state, bool _is_full, float _full_offset) : state(_state), is_full(_is_full),full_offset(_full_offset)  {}
     int get_state() const
     {
         return state;
@@ -36,9 +36,9 @@ public:
     {
         return is_full;
     }
-    float get_full_rate() const
+    float get_full_offset() const
     {
-        return full_rate;
+        return full_offset;
     }
 };
 
@@ -179,11 +179,8 @@ public:
             {
                 client.vehicle_rd_detect(ret);
             });
-        float rate = 0;
-        if (ret.max_volume != 0) {
-            rate = ret.cur_volume / ret.max_volume;
-        }
-        return runner_rd_detect_result(ret.state, ret.is_full, rate);
+
+        return runner_rd_detect_result(ret.state, ret.is_full, ret.full_offset);
     }
     bool dev_vehicle_passed_gate(const std::string &_dev_name)
     {

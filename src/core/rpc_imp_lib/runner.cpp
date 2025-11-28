@@ -35,7 +35,7 @@ void RUNNER::register_lua_function_virt(lua_State *_L)
         .beginClass<runner_rd_detect_result>("vehicle_rd_detect_result")
         .addProperty("state", &runner_rd_detect_result::get_state)
         .addProperty("is_full", &runner_rd_detect_result::get_is_full)
-        .addProperty("full_rate", &runner_rd_detect_result::get_full_rate)
+        .addProperty("full_offset", &runner_rd_detect_result::get_full_offset)
         .endClass()
         .addFunction("print_log_string", &print_log);
     luaL_dostring(

@@ -86,19 +86,9 @@ void common_driver::sim_vehicle_position(const vehicle_position_detect_state::ty
     m_rd_result.state = state;
 }
 
-void common_driver::sim_vehicle_max_volume(const double volume)
+void common_driver::sim_full_offset(const double full_offset)
 {
-    m_rd_result.max_volume = volume;
-}
-
-void common_driver::sim_vehicle_cur_volume(const double volume)
-{
-    m_rd_result.cur_volume = volume;
-}
-
-void common_driver::sim_vehicle_height(const double height)
-{
-    m_rd_result.height = height;
+    m_rd_result.full_offset = full_offset;
 }
 
 void common_driver::sim_vehicle_stuff(const bool is_full)

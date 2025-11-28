@@ -156,16 +156,6 @@ static void mock(std::ostream &out, std::vector<std::string> _params)
                         client.sim_vehicle_stuff(_params[2] == "full");
                         out << "模拟车辆满载" << std::endl;
                     }
-                    else if (_params[1] == "sim_vehicle_max_volume")
-                    {
-                        client.sim_vehicle_max_volume(std::stod(_params[2]));
-                        out << "模拟车辆最大体积" << std::endl;
-                    }
-                    else if (_params[1] == "sim_vehicle_cur_volume")
-                    {
-                        client.sim_vehicle_cur_volume(std::stod(_params[2]));
-                        out << "模拟车辆当前体积" << std::endl;
-                    }
                     else
                     {
                         out << "不支持的动作" << std::endl;
