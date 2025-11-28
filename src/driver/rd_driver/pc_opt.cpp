@@ -19,6 +19,9 @@
 #include <sys/file.h> // 引入 flock
 #include <unistd.h>   // 引入 close
 #include <rs_driver/utility/sync_queue.hpp>
+#include "pg.h"
+
+RealTimeSGFilter g_sg_filter(11, 2);
 
 static AD_INI_CONFIG *g_ini_config = nullptr;
 static vehicle_rd_detect_result g_rd_result;
@@ -610,18 +613,23 @@ struct vehicle_detail_info
 bool calc_filtered_full(float _full_offset, float _full_rate, long filter_length)
 {
     bool ret = true;
-    auto cur_full_offset = 0.0f;
-    g_full_offset_array.push_back(_full_offset);
-    if (g_full_offset_array.size() > filter_length)
-    {
-        g_full_offset_array.erase(g_full_offset_array.begin());
+    // auto cur_full_offset = 0.0f;
+    // g_full_offset_array.push_back(_full_offset);
+    // if (g_full_offset_array.size() > filter_length)
+    // {
+    //     g_full_offset_array.erase(g_full_offset_array.begin());
 
-    }
-    for (const auto &itr : g_full_offset_array)
-    {
-        cur_full_offset += itr;
-    }
-    cur_full_offset = cur_full_offset / g_full_offset_array.size();
+    // }
+    // for (const auto &itr : g_full_offset_array)
+    // {
+    //     cur_full_offset += itr;
+    // }
+    // cur_full_offset = cur_full_offset / g_full_offset_array.size();
+    // if (cur_full_offset > _full_rate)
+    // {
+    //     ret = false;
+    // }
+    auto cur_full_offset = g_sg_filter.process(_full_offset);
     if (cur_full_offset > _full_rate)
     {
         ret = false;
