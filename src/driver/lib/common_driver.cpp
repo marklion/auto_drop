@@ -146,7 +146,8 @@ void common_driver::start_relay_timer()
                 {
                     m_state_stay_position--;
                 }
-                if (m_state_stay_position == m_expect_position)
+                if ((m_relay_state == HOLD_OPEN) && (m_state_stay_position >= m_expect_position) ||
+                    (m_relay_state == HOLD_CLOSE) && (m_state_stay_position <= m_expect_position))
                 {
                     relay_do_action(STOP);
                 }

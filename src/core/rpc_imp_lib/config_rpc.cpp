@@ -67,7 +67,19 @@ public:
         int status;
         AD_RPC_SC::get_instance()->unregisterNode(shared_from_this());
         waitpid(m_pid, &status, WNOHANG);
+        bool need_restart = false;
         if (!WIFEXITED(status))
+        {
+            need_restart = true;
+        }
+        else
+        {
+            if (WEXITSTATUS(status) != 0)
+            {
+                need_restart = true;
+            }
+        }
+        if (need_restart)
         {
             m_logger.log(AD_LOGGER::ERROR, "subprocess %s exit with code %d", m_name.c_str(), WEXITSTATUS(status));
             AD_RPC_SC::get_instance()->yield_by_timer(2);
