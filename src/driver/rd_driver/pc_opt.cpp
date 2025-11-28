@@ -24,6 +24,8 @@ static AD_INI_CONFIG *g_ini_config = nullptr;
 static vehicle_rd_detect_result g_rd_result;
 static std::recursive_mutex g_rd_result_mutex;
 
+std::vector<float> g_full_offset_array;
+
 typedef pcl::PointXYZRGB myPoint;
 typedef pcl::PointCloud<myPoint> myPointCloud;
 typedef PointCloudT<pcl::PointXYZI> pcMsg;
@@ -604,7 +606,30 @@ struct vehicle_detail_info
     {
     }
 };
-static vehicle_detail_info vehicle_is_full(myPointCloud::Ptr _cloud, float _line_DistanceThreshold, float _max_z, float _x_min, float _x_max, float _y, myPointCloud::Ptr _full_cloud)
+
+bool calc_filtered_full(float _full_offset, float _full_rate, long filter_length)
+{
+    bool ret = true;
+    auto cur_full_offset = 0.0f;
+    g_full_offset_array.push_back(_full_offset);
+    if (g_full_offset_array.size() > filter_length)
+    {
+        g_full_offset_array.erase(g_full_offset_array.begin());
+
+    }
+    for (const auto &itr : g_full_offset_array)
+    {
+        cur_full_offset += itr;
+    }
+    cur_full_offset = cur_full_offset / g_full_offset_array.size();
+    if (cur_full_offset > _full_rate)
+    {
+        ret = false;
+    }
+    return ret;
+}
+
+static vehicle_detail_info vehicle_is_full(myPointCloud::Ptr _cloud, float _line_DistanceThreshold, float _max_z, float _x_min, float _x_max, float _y, myPointCloud::Ptr _full_cloud, long filter_length)
 {
     vehicle_detail_info ret;
     auto begin_us_timestamp = get_current_us_stamp();
@@ -658,10 +683,7 @@ static vehicle_detail_info vehicle_is_full(myPointCloud::Ptr _cloud, float _line
     ret.full_offset = full_offset;
     auto end_us_timestamp = get_current_us_stamp();
     rd_print_log("current volume rate:%f, spend:%dus", full_offset, end_us_timestamp - begin_us_timestamp);
-    if (full_offset < full_rate)
-    {
-        ret.is_full = false;
-    }
+    ret.is_full = calc_filtered_full(full_offset, full_rate, filter_length);
 
     return ret;
 }
@@ -777,13 +799,14 @@ static vehicle_rd_detect_result pc_get_state(myPointCloud::Ptr _cloud)
 
     const std::string config_sec = "get_state";
     auto line_DistanceThreshold = atof(get_ini_config()->get_config(config_sec, "line_DistanceThreshold", "0.1").c_str());
+    auto filter_length = atoi(get_ini_config()->get_config(config_sec, "filter_length", "1").c_str());
 
     auto pc_after_split_ret = split_cloud_to_side_and_content(_cloud);
     auto key_seg_ret = get_position_state_from_cloud(pc_after_split_ret.legal_side);
     ret.state = key_seg_ret.state;
     if (ret.state != vehicle_position_detect_state::vehicle_postion_out)
     {
-        auto vehicle_detail = vehicle_is_full(pc_after_split_ret.legal_side, line_DistanceThreshold, key_seg_ret.z, key_seg_ret.x_min, key_seg_ret.x_max, key_seg_ret.y, pc_after_split_ret.content);
+        auto vehicle_detail = vehicle_is_full(pc_after_split_ret.legal_side, line_DistanceThreshold, key_seg_ret.z, key_seg_ret.x_min, key_seg_ret.x_max, key_seg_ret.y, pc_after_split_ret.content, filter_length);
         ret.is_full = vehicle_detail.is_full;
         ret.full_offset = vehicle_detail.full_offset;
         color_cloud(0, 255, 0, pc_after_split_ret.legal_side);
