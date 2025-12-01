@@ -20,8 +20,10 @@
 #include <unistd.h>   // 引入 close
 #include <rs_driver/utility/sync_queue.hpp>
 #include "pg.h"
+#include "lp_filter.h"
 
 RealTimeSGFilter g_sg_filter(11, 2);
+LowPassFilter g_lp_filter(0.05);
 
 static AD_INI_CONFIG *g_ini_config = nullptr;
 static vehicle_rd_detect_result g_rd_result;
@@ -169,7 +171,10 @@ void driverReturnPointCloudToCallerCallback(std::shared_ptr<pcMsg> msg)
     {
         rd_print_log("stuffed_cloud_queue size is %zu", stuffed_cloud_queue.size());
     }
-    stuffed_cloud_queue.push(msg);
+    else
+    {
+        stuffed_cloud_queue.push(msg);
+    }
 }
 std::string make_file_name(const std::string &_filename)
 {
@@ -540,6 +545,7 @@ struct grid_volume_detial
     float full_offset = 0;
     myPointCloud::Ptr cloud;
     myPointCloud::Ptr last_cloud;
+    bool need_drop = false;
 };
 
 static grid_volume_detial calc_grid_volume(myPointCloud::Ptr _cloud, float _x_min, float _x_max, float _y_min, float _y_max, float _top_z)
@@ -589,11 +595,11 @@ static grid_volume_detial calc_grid_volume(myPointCloud::Ptr _cloud, float _x_mi
     }
     if (top_z != 0)
     {
-    ret.full_offset = top_z - _top_z;
+        ret.full_offset = top_z - _top_z;
     }
     else
     {
-        ret.full_offset = -0.5;
+        ret.need_drop = true;
     }
 
     return ret;
@@ -610,30 +616,43 @@ struct vehicle_detail_info
     }
 };
 
-bool calc_filtered_full(float _full_offset, float _full_rate, long filter_length)
+void record_offset(float _full_offset, float _full_offset_after_filter)
 {
-    bool ret = true;
-    // auto cur_full_offset = 0.0f;
-    // g_full_offset_array.push_back(_full_offset);
-    // if (g_full_offset_array.size() > filter_length)
-    // {
-    //     g_full_offset_array.erase(g_full_offset_array.begin());
-
-    // }
-    // for (const auto &itr : g_full_offset_array)
-    // {
-    //     cur_full_offset += itr;
-    // }
-    // cur_full_offset = cur_full_offset / g_full_offset_array.size();
-    // if (cur_full_offset > _full_rate)
-    // {
-    //     ret = false;
-    // }
-    auto cur_full_offset = g_sg_filter.process(_full_offset);
-    if (cur_full_offset > _full_rate)
+    static std::ofstream ofs("/database/offset_log.csv", std::ios::app);
+    if (ofs.is_open())
     {
-        ret = false;
+        ofs << _full_offset << "," << _full_offset_after_filter << std::endl;
     }
+}
+
+float calc_filtered_full_offset(float _full_offset, long filter_length)
+{
+    float ret = 0;
+    if (filter_length == 1)
+    {
+        ret = g_lp_filter.filter(_full_offset);
+    }
+    else if (filter_length > 1)
+    {
+        auto cur_full_offset = 0.0f;
+        g_full_offset_array.push_back(_full_offset);
+        if (g_full_offset_array.size() > filter_length)
+        {
+            g_full_offset_array.erase(g_full_offset_array.begin());
+        }
+        for (const auto &itr : g_full_offset_array)
+        {
+            cur_full_offset += itr;
+        }
+        cur_full_offset = cur_full_offset / g_full_offset_array.size();
+        ret = cur_full_offset;
+    }
+    else
+    {
+        ret = g_sg_filter.process(_full_offset);
+    }
+    record_offset(_full_offset, ret);
+
     return ret;
 }
 
@@ -679,19 +698,31 @@ static vehicle_detail_info vehicle_is_full(myPointCloud::Ptr _cloud, float _line
             {
                 ret.last_clouds = grid_volume_detail.last_cloud;
             }
+            if (grid_volume_detail.need_drop)
+            {
+                continue;
+            }
+            if (grid_volume_detail.full_offset > 0)
+            {
+                AD_LOGGER tmp_logger("RIDAR");
+                tmp_logger.log("one grid offset is %f", grid_volume_detail.full_offset);
+            }
             full_offset_array.push_back(grid_volume_detail.full_offset);
         }
     }
-    float full_offset = 0;
+    float full_offset = -1.5;
     for (const auto &itr : full_offset_array)
     {
         full_offset += itr;
     }
-    full_offset = full_offset / full_offset_array.size();
-    ret.full_offset = full_offset;
+    if (full_offset_array.size() > 0)
+    {
+        full_offset = full_offset / full_offset_array.size();
+    }
+    ret.full_offset = calc_filtered_full_offset(full_offset, filter_length);
+    ret.is_full = (ret.full_offset > full_rate);
     auto end_us_timestamp = get_current_us_stamp();
     rd_print_log("current volume rate:%f, spend:%dus", full_offset, end_us_timestamp - begin_us_timestamp);
-    ret.is_full = calc_filtered_full(full_offset, full_rate, filter_length);
 
     return ret;
 }
@@ -825,6 +856,8 @@ static vehicle_rd_detect_result pc_get_state(myPointCloud::Ptr _cloud)
     }
     else
     {
+        g_lp_filter.reset();
+        g_sg_filter.reset();
         put_cloud(pc_after_split_ret.content);
     }
     put_cloud(pc_after_split_ret.legal_side);

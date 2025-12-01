@@ -3,3 +3,4 @@
 **/cmake_tmp_dir/
 **/*gen_code/
 **/node_modules/
+src/tools/*.csv
