@@ -28,6 +28,7 @@ LowPassFilter g_lp_filter(0.05);
 static AD_INI_CONFIG *g_ini_config = nullptr;
 static vehicle_rd_detect_result g_rd_result;
 static std::recursive_mutex g_rd_result_mutex;
+static int g_distance = 0;
 
 std::vector<float> g_full_offset_array;
 
@@ -656,73 +657,39 @@ float calc_filtered_full_offset(float _full_offset, long filter_length)
     return ret;
 }
 
-static vehicle_detail_info vehicle_is_full(myPointCloud::Ptr _cloud, float _line_DistanceThreshold, float _max_z, float _x_min, float _x_max, float _y, myPointCloud::Ptr _full_cloud, long filter_length)
+static double calc_xlrd_z()
+{
+    double ret = 0;
+    auto distance_offset = atof(get_ini_config()->get_config("xlrd", "distance_offset", "0").c_str());
+
+    ret = -g_distance + distance_offset;
+
+    return ret;
+}
+
+static bool vehilce_disappeared()
+{
+    auto bottom_z = atof(get_ini_config()->get_config("xlrd", "bottom_z", "0").c_str());
+    auto xlrd_z = calc_xlrd_z();
+    return (xlrd_z < bottom_z);
+}
+
+static vehicle_detail_info vehicle_is_full( float _max_z)
 {
     vehicle_detail_info ret;
-    auto begin_us_timestamp = get_current_us_stamp();
-    const std::string config_sec = "get_state";
-
-    auto full_rate = atof(get_ini_config()->get_config(config_sec, "full_rate", "0.8").c_str());
-    auto spec_width = atof(get_ini_config()->get_config(config_sec, "spec_width", "2.45").c_str());
-    auto x_grid_number = atoi(get_ini_config()->get_config(config_sec, "x_grid_number", "10").c_str());
-    auto y_grid_number = atoi(get_ini_config()->get_config(config_sec, "y_grid_number", "7").c_str());
     ret.is_full = true;
 
-    auto min_z_point = find_max_or_min_z_point(_cloud, _line_DistanceThreshold, true);
-    myPoint left_point, right_point;
-    left_point.x = _x_min;
-    left_point.y = min_z_point->y;
-    left_point.z = min_z_point->z;
-    right_point.x = _x_max;
-    right_point.y = min_z_point->y;
-    right_point.z = min_z_point->z;
-    insert_several_points(_cloud, left_point, right_point);
-    auto min_z = min_z_point->z;
-    auto max_height = _max_z - min_z;
-    auto cur_length = _x_max - _x_min;
+    const std::string config_sec = "get_state";
+    auto filter_length = atoi(get_ini_config()->get_config(config_sec, "filter_length", "1").c_str());
+    auto full_rate = atof(get_ini_config()->get_config(config_sec, "full_rate", "0.8").c_str());
+    auto distance_offset = atof(get_ini_config()->get_config("xlrd", "distance_offset", "0").c_str());
 
-    std::vector<float> full_offset_array;
-    auto grid_x = cur_length / x_grid_number;
-    auto grid_y = spec_width / y_grid_number;
-    ret.last_clouds = _full_cloud;
-    for (auto i = 0; i < x_grid_number; i++)
-    {
-        for (auto j = 0; j < y_grid_number; j++)
-        {
-            auto grid_volume_detail = calc_grid_volume(ret.last_clouds, _x_min + i * grid_x, _x_min + (i + 1) * grid_x, _y + j * grid_y, _y + (j + 1) * grid_y, _max_z);
-            if (grid_volume_detail.cloud)
-            {
-                *ret.clouds += *(grid_volume_detail.cloud);
-            }
-            if (grid_volume_detail.last_cloud)
-            {
-                ret.last_clouds = grid_volume_detail.last_cloud;
-            }
-            if (grid_volume_detail.need_drop)
-            {
-                continue;
-            }
-            if (grid_volume_detail.full_offset > 0)
-            {
-                AD_LOGGER tmp_logger("RIDAR");
-                tmp_logger.log("one grid offset is %f", grid_volume_detail.full_offset);
-            }
-            full_offset_array.push_back(grid_volume_detail.full_offset);
-        }
-    }
-    float full_offset = -1.5;
-    for (const auto &itr : full_offset_array)
-    {
-        full_offset += itr;
-    }
-    if (full_offset_array.size() > 0)
-    {
-        full_offset = full_offset / full_offset_array.size();
-    }
-    ret.full_offset = calc_filtered_full_offset(full_offset, filter_length);
+    auto xlrd_top_positon = -g_distance + distance_offset;
+    auto xlrd_full_offset = xlrd_top_positon - _max_z;
+    float final_full_offset = xlrd_full_offset;
+
+    ret.full_offset = calc_filtered_full_offset(final_full_offset, filter_length);
     ret.is_full = (ret.full_offset > full_rate);
-    auto end_us_timestamp = get_current_us_stamp();
-    rd_print_log("current volume rate:%f, spend:%dus", full_offset, end_us_timestamp - begin_us_timestamp);
 
     return ret;
 }
@@ -833,33 +800,23 @@ static key_seg_params get_position_state_from_cloud(myPointCloud::Ptr _cloud)
 static vehicle_rd_detect_result pc_get_state(myPointCloud::Ptr _cloud)
 {
     vehicle_rd_detect_result ret;
-    ret.is_full = true;
+    ret.side_top_z = 0;
     ret.state = vehicle_position_detect_state::vehicle_postion_out;
-
-    const std::string config_sec = "get_state";
-    auto line_DistanceThreshold = atof(get_ini_config()->get_config(config_sec, "line_DistanceThreshold", "0.1").c_str());
-    auto filter_length = atoi(get_ini_config()->get_config(config_sec, "filter_length", "1").c_str());
 
     auto pc_after_split_ret = split_cloud_to_side_and_content(_cloud);
     auto key_seg_ret = get_position_state_from_cloud(pc_after_split_ret.legal_side);
     ret.state = key_seg_ret.state;
     if (ret.state != vehicle_position_detect_state::vehicle_postion_out)
     {
-        auto vehicle_detail = vehicle_is_full(pc_after_split_ret.legal_side, line_DistanceThreshold, key_seg_ret.z, key_seg_ret.x_min, key_seg_ret.x_max, key_seg_ret.y, pc_after_split_ret.content, filter_length);
-        ret.is_full = vehicle_detail.is_full;
-        ret.full_offset = vehicle_detail.full_offset;
+        ret.side_top_z = key_seg_ret.z;
         color_cloud(0, 255, 0, pc_after_split_ret.legal_side);
-
-        color_cloud(255, 0, 0, vehicle_detail.clouds);
-        put_cloud(vehicle_detail.clouds);
-        put_cloud(vehicle_detail.last_clouds);
     }
     else
     {
         g_lp_filter.reset();
         g_sg_filter.reset();
-        put_cloud(pc_after_split_ret.content);
     }
+    put_cloud(pc_after_split_ret.content);
     put_cloud(pc_after_split_ret.legal_side);
     put_cloud(pc_after_split_ret.illegal_side);
     update_cur_cloud();
@@ -993,8 +950,27 @@ void process_msg(std::shared_ptr<pcMsg> msg)
         auto frame_after_filter = pc_range_filter(frame_after_trans);
         // 体素滤波
         frame_after_filter = pc_vox_filter(frame_after_filter);
-        // 计算关键数据
-        auto detect_ret = pc_get_state(frame_after_filter);
+        // 计算车辆位置
+        auto position_ret = pc_get_state(frame_after_filter);
+        auto orig_result = get_detect_result();
+        if (orig_result.state != vehicle_position_detect_state::vehicle_postion_out)
+        {
+            position_ret.state = orig_result.state;
+            position_ret.side_top_z = orig_result.side_top_z;
+        }
+        if (vehilce_disappeared())
+        {
+            position_ret.state = vehicle_position_detect_state::vehicle_postion_out;
+            position_ret.side_top_z = 0;
+            g_lp_filter.reset();
+            g_sg_filter.reset();
+        }
+        auto full_ret = vehicle_is_full(position_ret.side_top_z);
+        vehicle_rd_detect_result detect_ret;
+        detect_ret.state = position_ret.state;
+        detect_ret.side_top_z = position_ret.side_top_z;
+        detect_ret.is_full = full_ret.is_full;
+        detect_ret.full_offset = full_ret.full_offset;
         save_detect_result(detect_ret);
     }
 }
@@ -1052,6 +1028,11 @@ void bind_callback2driver(robosense::lidar::LidarDriver<pcMsg> &driver, bool _fo
 
 void RS_DRIVER::start(const std::string &_file, int _interval_sec)
 {
+    m_modbus_driver.reset(new modbus_driver(
+        get_ini_config()->get_config("xlrd", "ip"),
+        atoi(get_ini_config()->get_config("xlrd", "port").c_str()),
+        atoi(get_ini_config()->get_config("xlrd", "slave_id").c_str())));
+    m_modbus_driver->add_float32_abcd_meta("distance", 4096);
     using namespace robosense::lidar;
 
     this->common_rs_driver_ptr = (void *)new LidarDriver<pcMsg>();
@@ -1071,6 +1052,7 @@ void RS_DRIVER::start(const std::string &_file, int _interval_sec)
                 0,
                 200, [this]()
                 {
+                    g_distance = m_modbus_driver->read_float32_abcd("distance");
                     auto cur_result = get_detect_result();
                     sim_vehicle_position(cur_result.state);
                     sim_vehicle_stuff(cur_result.is_full);

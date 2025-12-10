@@ -30,6 +30,7 @@ inline std::string AD_REDIS_CHANNEL_GATE_CTRL(const std::string &x = "") { retur
 #define AD_CONST_REDIS_KEY_RD_POSITION "rd_position"
 #define AD_CONST_REDIS_KEY_RD_FULL "rd_full"
 #define AD_CONST_REDIS_KEY_RD_FULL_OFFSET "rd_full_offset"
+#define AD_CONST_REDIS_KEY_RD_SIDE_TOP_Z "rd_side_top_z"
 #define AD_CONST_REDIS_KEY_LC_OPEN_THRESHOLD "lc_open_threshold"
 #define AD_CONST_REDIS_KEY_GATE "gate"
 #define AD_CONST_REDIS_KEY_PLATE "plate"

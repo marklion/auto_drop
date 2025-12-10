@@ -131,6 +131,7 @@ static std::map<std::string, std::function<void(driver_serviceClient &, neb::CJs
          json_obj.Add(AD_CONST_REDIS_KEY_RD_POSITION, rd_result.state);
          json_obj.Add(AD_CONST_REDIS_KEY_RD_FULL, rd_result.is_full);
          json_obj.Add(AD_CONST_REDIS_KEY_RD_FULL_OFFSET, rd_result.full_offset);
+         json_obj.Add(AD_CONST_REDIS_KEY_RD_SIDE_TOP_Z, rd_result.side_top_z);
      }},
     {AD_CONST_SCALE_DEVICE_NAME,
      [](driver_serviceClient &client, neb::CJsonObject &json_obj)

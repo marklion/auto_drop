@@ -2,6 +2,7 @@
 #define _PC_OPT_H_
 
 #include "../lib/common_driver.h"
+#include "../lib/modbus_driver.h"
 
 bool should_stop_walk();
 
@@ -9,6 +10,7 @@ void process_one_plyfile(const std::string &file_name);
 class RS_DRIVER : public common_driver
 {
     void *common_rs_driver_ptr = nullptr;
+    std::unique_ptr<modbus_driver> m_modbus_driver;
 public:
     RS_DRIVER(const std::string &_config_file);
     virtual ~RS_DRIVER();

@@ -13,6 +13,7 @@
                 </div>
             </el-descriptions-item>
             <el-descriptions-item label="货满高度偏差">{{current_state.rd_full_offset}}</el-descriptions-item>
+            <el-descriptions-item label="车厢顶部棱的z坐标">{{current_state.rd_side_top_z}}</el-descriptions-item>
             <el-descriptions-item label="车辆位置">
                 <el-tag type="primary" size="mini" v-if="current_state.rd_position == 0">初段</el-tag>
                 <el-tag type="success" size="mini" v-else-if="current_state.rd_position == 1">中段</el-tag>
@@ -42,6 +43,7 @@ export default {
                 rd_full: false,
                 scale_weight: 0,
                 rd_full_offset: 0,
+                rd_side_top_z: 0,
             },
         }
     },

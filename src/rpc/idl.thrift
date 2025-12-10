@@ -24,6 +24,7 @@ struct vehicle_rd_detect_result {
     1: vehicle_position_detect_state state,
     2: bool is_full,
     3: double full_offset,
+    4: double side_top_z,
 }
 
 struct device_config {

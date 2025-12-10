@@ -36,6 +36,7 @@ void RUNNER::register_lua_function_virt(lua_State *_L)
         .addProperty("state", &runner_rd_detect_result::get_state)
         .addProperty("is_full", &runner_rd_detect_result::get_is_full)
         .addProperty("full_offset", &runner_rd_detect_result::get_full_offset)
+        .addProperty("side_top_z", &runner_rd_detect_result::get_side_top_z)
         .endClass()
         .addFunction("print_log_string", &print_log);
     luaL_dostring(

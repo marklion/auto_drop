@@ -27,7 +27,8 @@ public:
     vehicle_position_detect_state::type state;
     bool is_full;
     float full_offset;
-    runner_rd_detect_result(vehicle_position_detect_state::type _state, bool _is_full, float _full_offset) : state(_state), is_full(_is_full),full_offset(_full_offset)  {}
+    float side_top_z;
+    runner_rd_detect_result(vehicle_position_detect_state::type _state, bool _is_full, float _full_offset, float _side_top_z) : state(_state), is_full(_is_full),full_offset(_full_offset), side_top_z(_side_top_z)  {}
     int get_state() const
     {
         return state;
@@ -39,6 +40,10 @@ public:
     float get_full_offset() const
     {
         return full_offset;
+    }
+    float get_side_top_z() const
+    {
+        return side_top_z;
     }
 };
 
@@ -180,7 +185,7 @@ public:
                 client.vehicle_rd_detect(ret);
             });
 
-        return runner_rd_detect_result(ret.state, ret.is_full, ret.full_offset);
+        return runner_rd_detect_result(ret.state, ret.is_full, ret.full_offset, ret.side_top_z);
     }
     bool dev_vehicle_passed_gate(const std::string &_dev_name)
     {
