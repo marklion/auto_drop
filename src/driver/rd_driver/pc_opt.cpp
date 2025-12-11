@@ -28,7 +28,7 @@ LowPassFilter g_lp_filter(0.05);
 static AD_INI_CONFIG *g_ini_config = nullptr;
 static vehicle_rd_detect_result g_rd_result;
 static std::recursive_mutex g_rd_result_mutex;
-static int g_distance = 0;
+static float g_distance = 0;
 
 std::vector<float> g_full_offset_array;
 
@@ -1057,6 +1057,7 @@ void RS_DRIVER::start(const std::string &_file, int _interval_sec)
                     sim_vehicle_position(cur_result.state);
                     sim_vehicle_stuff(cur_result.is_full);
                     sim_full_offset(cur_result.full_offset);
+                    set_side_top_z(cur_result.side_top_z);
                     ad_rpc_update_current_state();
                     serial_pc(); });
         }
@@ -1080,6 +1081,7 @@ void RS_DRIVER::save_ply_file(std::string &_return, const std::string &reason)
     save_ply(get_cur_cloud(), _return);
     save_ply(get_full_cloud(), full_ply);
 }
+
 
 bool should_stop_walk()
 {

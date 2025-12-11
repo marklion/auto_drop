@@ -59,6 +59,8 @@ public:
     void relay_do_action(lc_relay_state_t _req_state);
     void execute_to_threshold(int32_t threshold);
     virtual int get_position_coe() const;
+
+    void set_side_top_z(double side_top_z);
 };
 
 #endif // _COMMON_DRIVER_H_

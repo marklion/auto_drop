@@ -28,8 +28,8 @@ modbus_driver::modbus_driver(const std::string &_ip, unsigned short _port, int _
     auto ret = modbus_new_tcp(_ip.c_str(), _port);
     if (ret)
     {
-        modbus_set_response_timeout(ret, 0, 50000);
-        modbus_set_byte_timeout(ret, 0, 50000);
+        modbus_set_response_timeout(ret, 0, 500000);
+        modbus_set_byte_timeout(ret, 0, 500000);
         if (modbus_connect(ret) == -1)
         {
             m_logger.log(AD_LOGGER::ERROR, "modbus_connect failed: %s", modbus_strerror(errno));
@@ -45,6 +45,7 @@ modbus_driver::modbus_driver(const std::string &_ip, unsigned short _port, int _
     m_ctx = ret;
     if (m_ctx)
     {
+        m_is_working = true;
         std::thread(
             [this]()
             {

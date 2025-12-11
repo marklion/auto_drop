@@ -199,3 +199,8 @@ int common_driver::get_position_coe() const
 {
     return 20;
 }
+
+void common_driver::set_side_top_z(double side_top_z)
+{
+    m_rd_result.side_top_z = side_top_z;
+}
